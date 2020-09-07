@@ -50,7 +50,7 @@
     <div class="spacing"></div>
     <div class="spacing"></div>
     <div class="container">
-        <canvas id="canvas" width="480" height="448"></canvas>
+        <canvas id="canvas" width="960" height="896"></canvas>
     </div>
     <div class="spacing"></div>
     <div class="container">
@@ -61,9 +61,16 @@
             <button onclick="action('RightDash')">RIGHT_DASH</button> &nbsp;
             <button onclick="action('RightJump')">RIGHT_JUMP</button> &nbsp;
             <button onclick="action('Dash')">DASH</button> &nbsp;
-            <button onclick="action('None')">NONE</button>
+            <button onclick="action('None')">NONE</button> &nbsp;
+            <button onclick="run(event.target)">RUN</button> &nbsp;
+            <button onclick="action('Crouch')">CROUCH</button> &nbsp;
             <button onclick="action('Jump')">JUMP</button>
         </div>
+    </div>
+
+    <div class="spacing"></div>
+    <div class="container-horizontal">
+        <div id="console"></div>
     </div>
 
     <script>
@@ -73,9 +80,10 @@
                 "Request": "Reset",
                 "ClientId": "id"
             }, function(response) {
-                let {Observation: obs} = response;
+                let {Observation: obs,
+                     BlockEncodings: encodings} = response;
 
-                frameRender(obs);
+                frameRender(obs, encodings);
             });
         }
 
@@ -86,10 +94,26 @@
                 "CommitmentInterval": 6,
                 "ClientId": "id"
             }, function(response) {
-                let {Observation: obs} = response;
+                let {Observation: obs,
+                     BlockEncodings: encodings} = response;
 
-                frameRender(obs);
+                frameRender(obs, encodings);
             });
+        }
+
+        var intervalId = null;
+
+        function run(button) {
+            var command = button.innerText;
+            button.innerText = command === 'RUN' ? 'STOP' : 'RUN';
+
+            if (command === 'RUN') {
+                intervalId = setInterval(function() {
+                    action('None');
+                }, 250);
+            } else {
+                clearInterval(intervalId);
+            }
         }
 
         function query(request, process) {
@@ -107,7 +131,13 @@
         var context = canvas.getContext("2d");
         context.scale(2, 2);
 
-        function frameRender(frame) {
+        var colorEncodings = {}
+        var colorEncodingsTransparent = {}
+
+        function frameRender(frame, encodings) {
+            var console = document.getElementById('console');
+            // console.innerText = encodings.map(t => t.toFixed(2));
+
             var width = frame.length;
             var height = frame[0].length;
 
@@ -117,9 +147,50 @@
             for (var i = 0; i < width; i++) {
                 for (var j = 0; j < height; j++) {
                     context.beginPath();
-                    context.rect(j, i, 1, 1);
+                    context.rect(j*2, i*2, 2, 2);
                     context.fillStyle = 'rgb(' + frame[i][j].join(',') + ')';
                     context.fill();
+                }
+            }
+
+
+            var encodings = encodings.map(t => t.toFixed(2)); 
+
+            context.font = '12px serif';
+            context.fillStyle = 'yellow';
+            context.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            context.lineWidth = '0.1px';
+
+            console.innerText = encodings.length;
+
+            for (var encoding of encodings) {
+                var r = Math.round(Math.random()*255);
+                var g = Math.round(Math.random()*255);
+                var b = Math.round(Math.random()*255);
+
+                colorEncodings[encoding] = colorEncodings[encoding] || 'rgb(' + String([r, g, b]) + ')';
+                colorEncodingsTransparent[encoding] = colorEncodingsTransparent[encoding] || 'rgba(' + String([r, g, b, 0.3]) + ')';
+            }
+
+            var index = 0;
+            var o = 16;
+            for (var i = 0; i < width + 15; i+=16) {
+                for (var j = 0; j < height - 16; j+=16) {
+                    context.fillStyle = colorEncodingsTransparent[encodings[index]];
+                    context.beginPath();
+                    context.rect(j*2, i*2, 16*2, 16*2);
+                    context.fill();
+                    index += 1;
+                }
+            }
+
+            index = 0;
+            for (var i = 0; i < width; i+=16) {
+                for (var j = 0; j < height - 16; j+=16) {
+                    context.fillStyle = 'rgba(255, 255, 0, 0.5)';
+                    context.fillText(encodings[index], j*2 + 5, i*2 + o + 4);
+                    // context.strokeText(encodings[index], j*2 + o / 2, i*2 + o);
+                    index += 1;
                 }
             }
         }

@@ -7,6 +7,25 @@ import torch
 import retro
 
 
+def block_partition(matrix, block_width):
+    matrix = matrix.reshape(-1, block_width, matrix.shape[0] // block_width, block_width, 3)
+    matrix = matrix.transpose(2, 1).reshape(-1, block_width, block_width, 3)
+
+    return matrix
+
+def observation_prepare(observation):
+    obs = torch.tensor(observation)
+
+    obs = block_partition(obs[:224,:224], 16)
+    r = obs[-40]
+
+    exponent = 2
+    encodings = [((block.float() / 255 / 16 / 16).sum()**exponent).item() for block in obs]
+    # encodings = [hash(((block.float() / 255 / 16 / 16).sum()**exponent).item()) % 255 for block in obs]
+
+    return observation.tolist(), encodings
+
+
 class Server(http.server.BaseHTTPRequestHandler):
     with open('index.html') as file:
         html_index_file = file.read()
@@ -39,8 +58,11 @@ class Server(http.server.BaseHTTPRequestHandler):
 
             Server.environments[client_id] = environment
 
+            observation, blocks = observation_prepare(observation)
+
             return {
-                'Observation': observation.tolist()
+                'Observation': observation,
+                'BlockEncodings': blocks
             }
 
         elif request_name == "Action":
@@ -62,8 +84,11 @@ class Server(http.server.BaseHTTPRequestHandler):
             for _ in range(commitment_interval):
                 observation, reward, is_done, information = environment.step(action)
 
+            observation, blocks = observation_prepare(observation)
+
             return {
-                'Observation': observation.tolist()
+                'Observation': observation,
+                'BlockEncodings': blocks
             }
 
 
