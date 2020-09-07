@@ -38,6 +38,17 @@
             border: 1px solid #5894f8;
             background: #5894f8;
         }
+
+        #blocks {
+            display: flex;
+            flex-flow: wrap;
+        }
+
+        table, table td, table tr {
+            padding: 1px;
+            margin: 0px;
+            border-spacing: 0px;
+        }
     </style>
 	
 </head>
@@ -50,7 +61,7 @@
     <div class="spacing"></div>
     <div class="spacing"></div>
     <div class="container">
-        <canvas id="canvas" width="960" height="896"></canvas>
+        <canvas id="canvas" width="1440" height="1344"></canvas>
     </div>
     <div class="spacing"></div>
     <div class="container">
@@ -73,6 +84,10 @@
         <div id="console"></div>
     </div>
 
+    <div class="container-horizontal">
+        <div id="blocks"></div>
+    </div>
+
     <script>
 
         function reset() {
@@ -81,9 +96,11 @@
                 "ClientId": "id"
             }, function(response) {
                 let {Observation: obs,
-                     BlockEncodings: encodings} = response;
+                     BlockEncodings: encodings,
+                     Blocks: blocks} = response;
 
                 frameRender(obs, encodings);
+                blocksRender(blocks)
             });
         }
 
@@ -95,9 +112,11 @@
                 "ClientId": "id"
             }, function(response) {
                 let {Observation: obs,
-                     BlockEncodings: encodings} = response;
+                     BlockEncodings: encodings,
+                     Blocks: blocks} = response;
 
                 frameRender(obs, encodings);
+                blocksRender(blocks);
             });
         }
 
@@ -129,10 +148,31 @@
 
         var canvas = document.getElementById("canvas");
         var context = canvas.getContext("2d");
-        context.scale(2, 2);
+        context.scale(3, 3);
 
         var colorEncodings = {}
         var colorEncodingsTransparent = {}
+
+        function blocksRender(blocks) {
+            var blocksElement = document.getElementById('blocks');
+
+            // var console = document.getElementById('console');
+            // console.innerText = blocks.length;
+
+            var table = blocks .map (block =>
+                '<table>' + block .map (row =>
+                    '<tr>' + row .map(pixel => `<td style='background: rgb(${pixel.join(',')})'></td>`) .join('') + '</tr>'
+                ).join('') + '</table>'
+            ).join('');
+
+            blocksElement.innerHTML = table;
+            
+            template = `
+                <table>
+                    <tr>${0}
+                </table>
+            `;
+        }
 
         function frameRender(frame, encodings) {
             var console = document.getElementById('console');
@@ -141,8 +181,8 @@
             var width = frame.length;
             var height = frame[0].length;
 
-            canvas.style.width = 2*width*8/7 + 'px';
-            canvas.style.height = 2*width + 'px';
+            canvas.style.width = 3*width*8/7 + 'px';
+            canvas.style.height = 3*width + 'px';
 
             for (var i = 0; i < width; i++) {
                 for (var j = 0; j < height; j++) {
@@ -154,7 +194,7 @@
             }
 
 
-            var encodings = encodings.map(t => t.toFixed(2)); 
+            var encodings = encodings.map(t => (t*10).toFixed(2)); 
 
             context.font = '12px serif';
             context.fillStyle = 'yellow';
@@ -172,10 +212,13 @@
                 colorEncodingsTransparent[encoding] = colorEncodingsTransparent[encoding] || 'rgba(' + String([r, g, b, 0.3]) + ')';
             }
 
+            var topChomp = 4;
+            var bottomChomp = 2;
+
             var index = 0;
             var o = 16;
-            for (var i = 0; i < width + 15; i+=16) {
-                for (var j = 0; j < height - 16; j+=16) {
+            for (var i = 0 + topChomp*16; i < width + 15 - bottomChomp*16; i+=16) {
+                for (var j = 0; j < height; j+=16) {
                     context.fillStyle = colorEncodingsTransparent[encodings[index]];
                     context.beginPath();
                     context.rect(j*2, i*2, 16*2, 16*2);
@@ -185,8 +228,8 @@
             }
 
             index = 0;
-            for (var i = 0; i < width; i+=16) {
-                for (var j = 0; j < height - 16; j+=16) {
+            for (var i = 0 + topChomp*16; i < width + 15 - bottomChomp*16; i+=16) {
+                for (var j = 0; j < height; j+=16) {
                     context.fillStyle = 'rgba(255, 255, 0, 0.5)';
                     context.fillText(encodings[index], j*2 + 5, i*2 + o + 4);
                     // context.strokeText(encodings[index], j*2 + o / 2, i*2 + o);

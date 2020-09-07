@@ -13,17 +13,31 @@ def block_partition(matrix, block_width):
 
     return matrix
 
-def observation_prepare(observation):
+def observation_prepare(observation, blocks_seen):
     obs = torch.tensor(observation)
 
-    obs = block_partition(obs[:224,:224], 16)
-    r = obs[-40]
+    obs = torch.cat([obs,
+                     torch.zeros(16, 240, 3)]).long()
+
+    blocks = block_partition(obs, 16)
+
+    blocks = blocks[4*15:-2*15]
 
     exponent = 2
-    encodings = [((block.float() / 255 / 16 / 16).sum()**exponent).item() for block in obs]
-    # encodings = [hash(((block.float() / 255 / 16 / 16).sum()**exponent).item()) % 255 for block in obs]
+    # encodings = [((block.float() / 255 / 16 / 16).sum()**exponent).item() for block in blocks]
+    # encodings = [hash(((block.float() / 255 / 16 / 16).sum()**exponent).item()) % 255 for block in blocks]
 
-    return observation.tolist(), encodings
+    asymmetric = torch.linspace(0.5, 1.5, 16*16*3)**3
+    # encodings = [((block.flatten().float() @ asymmetric / 16 / 16 / 3 / 255) - 0.5).item() for block in blocks]
+    encodings = [((block.flatten().float() @ asymmetric / 16 / 16 / 3 / 255)).item() for block in blocks]
+
+    tuples = set([tuple(block.flatten().tolist()) for block in blocks])
+    # blocks_seen.update(tuples)
+    # sorted_ = sorted(list(blocks_seen))
+    sorted_ = sorted(list(tuples))
+    blocks = [torch.tensor(block).reshape(16, 16, 3) for block in sorted_]
+
+    return observation.tolist(), encodings, [block.tolist() for block in blocks]
 
 
 class Server(http.server.BaseHTTPRequestHandler):
@@ -31,6 +45,7 @@ class Server(http.server.BaseHTTPRequestHandler):
         html_index_file = file.read()
 
     environments = {}
+    blocks_seen = {}
 
     actions = {
         'Left':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
@@ -38,8 +53,8 @@ class Server(http.server.BaseHTTPRequestHandler):
         'Jump':      [0, 0, 0, 0, 0, 0, 0, 0, 1],
         'None':      [0, 0, 0, 0, 0, 0, 0, 0, 0],
         'Crouch':    [0, 0, 0, 0, 0, 1, 0, 0, 0],
-        'Dash':      [0, 0, 0, 1, 0, 0, 0, 0, 0],
-        'RightDash': [0, 0, 0, 1, 0, 0, 0, 1, 0],
+        'Dash':      [0, 0, 1, 0, 0, 0, 0, 0, 0],
+        'RightDash': [0, 0, 1, 0, 0, 0, 0, 1, 0],
         'LeftJump':  [0, 0, 0, 0, 0, 0, 1, 0, 1],
         'RightJump': [0, 0, 0, 0, 0, 0, 0, 1, 1]
     }
@@ -57,12 +72,14 @@ class Server(http.server.BaseHTTPRequestHandler):
             observation = environment.reset()
 
             Server.environments[client_id] = environment
+            Server.blocks_seen[client_id] = set()
 
-            observation, blocks = observation_prepare(observation)
+            observation, encodings, blocks = observation_prepare(observation, Server.blocks_seen[client_id])
 
             return {
                 'Observation': observation,
-                'BlockEncodings': blocks
+                'BlockEncodings': encodings,
+                'Blocks': blocks
             }
 
         elif request_name == "Action":
@@ -70,6 +87,7 @@ class Server(http.server.BaseHTTPRequestHandler):
             action = Server.actions[request["Action"]]
 
             environment = Server.environments[client_id]
+            blocks_seen = Server.blocks_seen[client_id]
 
             # action = environment.action_space.sample()
             unknown = [0, 0, 0, 0, 0, 1, 0, 0, 0]
@@ -84,11 +102,12 @@ class Server(http.server.BaseHTTPRequestHandler):
             for _ in range(commitment_interval):
                 observation, reward, is_done, information = environment.step(action)
 
-            observation, blocks = observation_prepare(observation)
+            observation, encodings, blocks = observation_prepare(observation, blocks_seen)
 
             return {
                 'Observation': observation,
-                'BlockEncodings': blocks
+                'BlockEncodings': encodings,
+                'Blocks': blocks
             }
 
 
