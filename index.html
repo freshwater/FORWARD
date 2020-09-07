@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Super Mario Bros.</title>
+
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	
+	<link rel="shortcut icon" type="image/x-icon" href="images/favicon.ico" />
+
+    <style>
+        html, body, #map {
+        }
+
+        .title {
+            text-align: center;
+            width: 100%;
+        }
+
+        .spacing {
+            height: 10px;
+        }
+
+        .container {
+            display: flex;
+            align-items: center;
+            justify-items: center;
+            flex-direction: column;
+        }
+
+        .container-horizontal {
+            display: flex;
+            align-items: center;
+            justify-items: center;
+        }
+
+        #canvas {
+            border: 1px solid #5894f8;
+            background: #5894f8;
+        }
+    </style>
+	
+</head>
+<body>
+
+    <div class="spacing"></div>
+    <div class="spacing"></div>
+    <div class="spacing"></div>
+    <div class="title">Super Mario Bros.</div>
+    <div class="spacing"></div>
+    <div class="spacing"></div>
+    <div class="container">
+        <canvas id="canvas" width="480" height="448"></canvas>
+    </div>
+    <div class="spacing"></div>
+    <div class="container">
+        <div class="container-horizontal">
+            <button onclick="reset()">RESET</button> &nbsp;
+            <button onclick="action('Left')">LEFT</button> &nbsp;
+            <button onclick="action('Right')">RIGHT</button> &nbsp;
+            <button onclick="action('RightDash')">RIGHT_DASH</button> &nbsp;
+            <button onclick="action('RightJump')">RIGHT_JUMP</button> &nbsp;
+            <button onclick="action('Dash')">DASH</button> &nbsp;
+            <button onclick="action('None')">NONE</button>
+            <button onclick="action('Jump')">JUMP</button>
+        </div>
+    </div>
+
+    <script>
+
+        function reset() {
+            query({
+                "Request": "Reset",
+                "ClientId": "id"
+            }, function(response) {
+                let {Observation: obs} = response;
+
+                frameRender(obs);
+            });
+        }
+
+        function action(action_) {
+            query({
+                "Request": "Action",
+                "Action": action_,
+                "CommitmentInterval": 6,
+                "ClientId": "id"
+            }, function(response) {
+                let {Observation: obs} = response;
+
+                frameRender(obs);
+            });
+        }
+
+        function query(request, process) {
+            var canvas = document.getElementById('canvas');
+
+            fetch('.', {
+                method: 'POST',
+                body: JSON.stringify(request)
+            })
+            .then(function(response) { return response.json(); })
+            .then(process);
+        }
+
+        var canvas = document.getElementById("canvas");
+        var context = canvas.getContext("2d");
+        context.scale(2, 2);
+
+        function frameRender(frame) {
+            var width = frame.length;
+            var height = frame[0].length;
+
+            canvas.style.width = 2*width*8/7 + 'px';
+            canvas.style.height = 2*width + 'px';
+
+            for (var i = 0; i < width; i++) {
+                for (var j = 0; j < height; j++) {
+                    context.beginPath();
+                    context.rect(j, i, 1, 1);
+                    context.fillStyle = 'rgb(' + frame[i][j].join(',') + ')';
+                    context.fill();
+                }
+            }
+        }
+
+        reset();
+
+    </script>
+
+</body>
+</html>
+
