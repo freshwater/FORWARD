@@ -6,6 +6,9 @@ import time
 import torch
 import retro
 
+import random
+import os
+import matplotlib.pyplot as plt
 
 def block_partition(matrix, block_width):
     matrix = matrix.reshape(-1, block_width, matrix.shape[0] // block_width, block_width, 3)
@@ -13,31 +16,88 @@ def block_partition(matrix, block_width):
 
     return matrix
 
-def observation_prepare(observation, blocks_seen):
-    obs = torch.tensor(observation)
+class Environment2:
+    def __init__(self):
+        self.environment = retro.make(game='SuperMarioBros-Nes')
 
-    obs = torch.cat([obs,
-                     torch.zeros(16, 240, 3)]).long()
+        self.blocks_seen = []
+        self.blocks_seen_urls = []
 
-    blocks = block_partition(obs, 16)
+        self.encodings = set()
+        self.encodings_frame = set()
 
-    blocks = blocks[4*15:-2*15]
+        random_key = str(random.random())[2:]
+        self.image_files_folder = random_key
+        os.makedirs('/tmp/' + self.image_files_folder)
 
-    exponent = 2
-    # encodings = [((block.float() / 255 / 16 / 16).sum()**exponent).item() for block in blocks]
-    # encodings = [hash(((block.float() / 255 / 16 / 16).sum()**exponent).item()) % 255 for block in blocks]
+        self.frame = self.environment.reset()
+        self.blocks_identify(self.frame)
 
-    asymmetric = torch.linspace(0.5, 1.5, 16*16*3)**3
-    # encodings = [((block.flatten().float() @ asymmetric / 16 / 16 / 3 / 255) - 0.5).item() for block in blocks]
-    encodings = [((block.flatten().float() @ asymmetric / 16 / 16 / 3 / 255)).item() for block in blocks]
+    def step(self, action, commitment_interval):
+        t0 = time.time()
+        for _ in range(commitment_interval):
+            self.frame, reward, is_done, information = self.environment.step(action)
+        
+        self.blocks_identify(self.frame)
 
-    tuples = set([tuple(block.flatten().tolist()) for block in blocks])
-    # blocks_seen.update(tuples)
-    # sorted_ = sorted(list(blocks_seen))
-    sorted_ = sorted(list(tuples))
-    blocks = [torch.tensor(block).reshape(16, 16, 3) for block in sorted_]
+        return self.frame # , reward, is_done, information
 
-    return observation.tolist(), encodings, [block.tolist() for block in blocks]
+    def close(self):
+        self.environment.render(close=True)
+        self.environment.close()
+
+    __del__ = close
+
+    def blocks_identify(self, frame):
+        t0 = time.time()
+        obs = torch.tensor(frame)
+
+        obs = torch.cat([obs,
+                         torch.zeros(16, 240, 3)]).long()
+
+        blocks = block_partition(obs, 16)
+
+        blocks = blocks[4*15:-2*15]
+
+        exponent = 2
+
+        asymmetric = torch.linspace(0.5, 1.5, 16*16*3)**3
+        # encodings = [((block.float() / 255 / 16 / 16).sum()**exponent).item() for block in blocks]
+        # encodings = [hash(((block.float() / 255 / 16 / 16).sum()**exponent).item()) % 255 for block in blocks]
+        # encodings = [((block.flatten().float() @ asymmetric / 16 / 16 / 3 / 255) - 0.5).item() for block in blocks]
+        encodings_frame = [((block.flatten().float() @ asymmetric / 16 / 16 / 3 / 255)).item() for block in blocks]
+
+        diffs = set(encodings_frame).difference(self.encodings)
+
+        written = set()
+        for encoding, block in zip(encodings_frame, blocks):
+            if encoding in diffs and encoding not in written:
+                written.add(encoding)
+
+                plt.imsave(f"/tmp/{self.image_files_folder}/{str(encoding)[2:]}.png", block.byte().numpy())
+                self.blocks_seen_urls.append(f"{self.image_files_folder}/{str(encoding)[2:]}.png")
+
+        new_blocks = [block for encoding, block in zip(encodings_frame, blocks)
+                            if encoding in diffs]
+
+        new_blocks = set(tuple(block.flatten().tolist()) for block in new_blocks)
+        new_blocks = [torch.tensor(block).reshape(16, 16, 3) for block in new_blocks]
+
+        # update
+        new_blocks = [block.tolist() for block in new_blocks]
+        self.blocks_seen.extend(new_blocks)
+
+        # if random.random() < 0.1:
+        #     self.blocks_seen = sorted(self.blocks_seen, key=lambda x: tuple(torch.tensor(x).flatten().tolist()))
+
+        self.encodings.update(diffs)
+        self.encodings_frame = encodings_frame
+
+
+    def interface_render(self):
+        self.blocks_seen_urls = sorted(self.blocks_seen_urls)
+        return self.frame.tolist(), list(self.encodings_frame), self.blocks_seen_urls
+
 
 
 class Server(http.server.BaseHTTPRequestHandler):
@@ -65,19 +125,14 @@ class Server(http.server.BaseHTTPRequestHandler):
 
         if request_name == "Reset":
             if environment := Server.environments.get(client_id):
-                environment.render(close=True)
                 environment.close()
 
-            environment = retro.make(game='SuperMarioBros-Nes')
-            observation = environment.reset()
+            Server.environments[client_id] = Environment2()
 
-            Server.environments[client_id] = environment
-            Server.blocks_seen[client_id] = set()
-
-            observation, encodings, blocks = observation_prepare(observation, Server.blocks_seen[client_id])
+            frame, encodings, blocks = Server.environments[client_id].interface_render()
 
             return {
-                'Observation': observation,
+                'Observation': frame,
                 'BlockEncodings': encodings,
                 'Blocks': blocks
             }
@@ -87,7 +142,6 @@ class Server(http.server.BaseHTTPRequestHandler):
             action = Server.actions[request["Action"]]
 
             environment = Server.environments[client_id]
-            blocks_seen = Server.blocks_seen[client_id]
 
             # action = environment.action_space.sample()
             unknown = [0, 0, 0, 0, 0, 1, 0, 0, 0]
@@ -99,13 +153,11 @@ class Server(http.server.BaseHTTPRequestHandler):
 
             print("ACTION", action)
 
-            for _ in range(commitment_interval):
-                observation, reward, is_done, information = environment.step(action)
-
-            observation, encodings, blocks = observation_prepare(observation, blocks_seen)
+            Server.environments[client_id].step(action, commitment_interval)
+            frame, encodings, blocks = Server.environments[client_id].interface_render()
 
             return {
-                'Observation': observation,
+                'Observation': frame,
                 'BlockEncodings': encodings,
                 'Blocks': blocks
             }
@@ -131,16 +183,28 @@ class Server(http.server.BaseHTTPRequestHandler):
 
 
     def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
+        if self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
 
-        with open('index.html') as file:
-            Server.html_index_file = file.read()
+            with open('index.html') as file:
+                Server.html_index_file = file.read()
 
-        response = Server.html_index_file
+            response = Server.html_index_file
 
-        self.wfile.write(response.encode())
+            self.wfile.write(response.encode())
+
+        else:
+            self.send_response(200)
+            self.send_header('Content-type', 'image/png')
+            self.send_header('Cache-Control', 'max-age=30')
+            self.end_headers()
+
+            print(".", end="")
+
+            with open('/tmp' + self.path, 'rb') as file:
+                self.wfile.write(file.read())
 
 
 def run(port=80):

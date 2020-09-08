@@ -39,9 +39,23 @@
             background: #5894f8;
         }
 
-        #blocks {
+        /*#blocks {
             display: flex;
             flex-flow: wrap;
+            gap: 0px;
+        }*/
+
+        #blocks div {
+            line-height: 0px;
+        }
+
+        #blocks img {
+            width: 8px;
+            height: 8px;
+            border-right: 0.5px solid white;
+            border-bottom: 0.5px solid white;
+
+            background: #5894f8;
         }
 
         table, table td, table tr {
@@ -85,7 +99,7 @@
     </div>
 
     <div class="container-horizontal">
-        <div id="blocks"></div>
+        <div id="blocks"><div></div></div>
     </div>
 
     <script>
@@ -153,31 +167,25 @@
         var colorEncodings = {}
         var colorEncodingsTransparent = {}
 
-        function blocksRender(blocks) {
+        var consoleElement = document.getElementById('console');
+
+        function blocksRender(blocks_urls) {
+            consoleElement.innerText = blocks_urls.length;
+
             var blocksElement = document.getElementById('blocks');
 
-            // var console = document.getElementById('console');
-            // console.innerText = blocks.length;
+            var list = document.createElement('div');
+            for (var url of blocks_urls) {
+                var img = document.createElement('img');
+                img.setAttribute('src', url);
 
-            var table = blocks .map (block =>
-                '<table>' + block .map (row =>
-                    '<tr>' + row .map(pixel => `<td style='background: rgb(${pixel.join(',')})'></td>`) .join('') + '</tr>'
-                ).join('') + '</table>'
-            ).join('');
+                list.appendChild(img);
+            }
 
-            blocksElement.innerHTML = table;
-            
-            template = `
-                <table>
-                    <tr>${0}
-                </table>
-            `;
+            blocksElement.replaceChild(list, blocksElement.firstChild);
         }
 
         function frameRender(frame, encodings) {
-            var console = document.getElementById('console');
-            // console.innerText = encodings.map(t => t.toFixed(2));
-
             var width = frame.length;
             var height = frame[0].length;
 
@@ -200,8 +208,6 @@
             context.fillStyle = 'yellow';
             context.strokeStyle = 'rgba(255, 255, 255, 0.2)';
             context.lineWidth = '0.1px';
-
-            console.innerText = encodings.length;
 
             for (var encoding of encodings) {
                 var r = Math.round(Math.random()*255);
