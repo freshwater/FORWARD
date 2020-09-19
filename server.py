@@ -33,11 +33,13 @@ class Environment2:
 
         self.frame = self.environment.reset()
         self.blocks_identify(self.frame)
+        self.frame_index = 0
 
     def step(self, action, commitment_interval):
         t0 = time.time()
         for _ in range(commitment_interval):
             self.frame, reward, is_done, information = self.environment.step(action)
+            self.frame_index += 1
         
         self.blocks_identify(self.frame)
 
@@ -98,7 +100,7 @@ class Environment2:
 
     def interface_render(self):
         self.blocks_seen_urls = sorted(self.blocks_seen_urls)
-        return self.frame.tolist(), list(self.encodings_frame), self.blocks_seen_urls
+        return self.frame.tolist(), list(self.encodings_frame), self.blocks_seen_urls, self.frame_index
 
 
 
@@ -174,7 +176,7 @@ class Server(http.server.BaseHTTPRequestHandler):
 
             image_files_folder = Server.environments[client_id].image_files_folder
             file_name = f"{image_files_folder}/{uuid.uuid4()}.png"
-            frame, _encodings, _blocks = Server.environments[client_id].interface_render()
+            frame, _encodings, _blocks, _frame_index = Server.environments[client_id].interface_render()
             plt.imsave("/tmp/" + file_name, np.array(frame).astype(np.uint8))
 
             return file_name
@@ -188,12 +190,13 @@ class Server(http.server.BaseHTTPRequestHandler):
 
             Server.environments[client_id] = Environment2(game)
 
-            frame, encodings, blocks = Server.environments[client_id].interface_render()
+            frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
 
             return {
                 'Observation': frame,
                 'BlockEncodings': encodings,
-                'Blocks': blocks
+                'Blocks': blocks,
+                'FrameIndex': frame_index
             }
 
         elif request_name == "Action":
@@ -213,12 +216,13 @@ class Server(http.server.BaseHTTPRequestHandler):
             print("ACTION", action)
 
             Server.environments[client_id].step(action, commitment_interval)
-            frame, encodings, blocks = Server.environments[client_id].interface_render()
+            frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
 
             return {
                 'Observation': frame,
                 'BlockEncodings': encodings,
-                'Blocks': blocks
+                'Blocks': blocks,
+                'FrameIndex': frame_index
             }
 
         raise NotImplementedError(request)

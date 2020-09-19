@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title>Super Mario Bros.</title>
 
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -57,6 +56,15 @@
             padding: 1px;
             margin: 0px;
             border-spacing: 0px;
+        }
+
+        .commitment-interval-input {
+            width: 37px;
+            text-align: center;
+        }
+
+        button {
+            user-select: none;
         }
     </style>
 	
@@ -115,6 +123,12 @@
         <div id="codes-display-modes-selection" class="container-horizontal"></div>
         <div style="height: 2.1px"></div>
         <div id="blocks-display-modes-selection" class="container-horizontal"></div>
+        <div style="height: 5px"></div>
+        <span style="display: flex; flex-direction: row">
+        Commitment Interval:&nbsp;<input class="commitment-interval-input" type="number" min="1"  value="6"
+               onfocus="event.target.blur()"
+               onchange="commitmentInterval = event.target.value"></input>
+        </span>
     </div>
 
     <div class="spacing"></div>
@@ -142,7 +156,6 @@
 
         query({'Request': 'AvailableGames', 'ClientId': 'id'}, function(response) {
             let games = response['AvailableGames'];
-
             ReactDOM.render(<GameSelection gamesList={games} selectedGame={"SuperMarioBros-Nes"}/>, document.querySelector('.title'));
         });
 
@@ -203,6 +216,7 @@
         function reset(game) {
             game = game || lastSelectedGame;
             lastSelectedGame = game;
+            document.title = game;
 
             query({
                 "Request": "Reset",
@@ -211,9 +225,10 @@
             }, function(response) {
                 let {Observation: obs,
                      BlockEncodings: encodings,
-                     Blocks: blocks} = response;
+                     Blocks: blocks,
+                     FrameIndex: frameIndex} = response;
 
-                frameRender(obs, encodings);
+                frameRender(obs, encodings, frameIndex);
                 blocksRender(blocks)
                 query({
                     "Request": "FaviconUrl",
@@ -225,18 +240,20 @@
             });
         }
 
+        var commitmentInterval = 6;
         function action(action_) {
             query({
                 "Request": "Action",
                 "Action": action_,
-                "CommitmentInterval": 6,
+                "CommitmentInterval": parseInt(commitmentInterval, 10),
                 "ClientId": "id"
             }, function(response) {
                 let {Observation: obs,
                      BlockEncodings: encodings,
-                     Blocks: blocks} = response;
+                     Blocks: blocks,
+                     FrameIndex: frameIndex} = response;
 
-                frameRender(obs, encodings);
+                frameRender(obs, encodings, frameIndex);
                 blocksRender(blocks);
             });
         }
@@ -288,11 +305,11 @@
 
         var lastFrame = null;
         var lastEncodings = null;
-        function frameRender(frame, encodings) {
-            frame = frame || lastFrame;
+        var lastFrameIndex = null;
+        function frameRender(frame=lastFrame, encodings=lastEncodings, frameIndex=lastFrameIndex) {
             lastFrame = frame;
-            encodings = encodings || lastEncodings;
             lastEncodings = encodings;
+            lastFrameIndex = frameIndex;
 
             var width = frame.length;
             var height = frame[0].length;
@@ -319,7 +336,7 @@
             context.strokeStyle = 'rgba(255, 255, 255, 0.2)';
             context.lineWidth = '0.1px';
 
-            const hash = function(str, seed = 0) {
+            function hash(str, seed = 0) {
                 // "Generate a Hash from string in Javascript"
                 //    https://stackoverflow.com/a/52171480 
                 let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
@@ -376,6 +393,11 @@
                 }
             }
 
+            // right-adjust frame index
+            let frameIndexString = `${frameIndex}`;
+            let textMetrics = context.measureText('_______'.substring(0, 7 - frameIndexString.length))
+            context.fillStyle = 'yellow';
+            context.fillText(frameIndexString, 2*width - 13 + textMetrics.width, 12);
         }
 
         reset("SuperMarioBros-Nes");

@@ -29,7 +29,10 @@ RUN apt-get install --yes xvfb
 RUN apt-get install --yes python-opengl
 RUN pip3 install gym-retro
 
-RUN pip install matplotlib
+RUN pip3 install matplotlib
+
+RUN pip3 install scikit-learn
+
 
 
 ## SPARK
@@ -54,11 +57,10 @@ ENV PATH="/opt/spark/bin:/opt/spark/sbin:${PATH}"
 
 # RUN /opt/spark/sbin/start-master.sh
 
-RUN pip3 install pyspark
-RUN pip install -U scikit-learn
-
 ENV PYTHONPATH="${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-${py4j_version}-src.zip"
 # ENV SPARK_OPTS="--driver-java-options=-Xms1024M --driver-java-options=-Xmx4096M --driver-java-options=-Dlog4j.logLevel=info"
+
+RUN pip3 install pyspark
 
 WORKDIR /workfolder
 
