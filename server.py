@@ -17,11 +17,8 @@ def block_partition(matrix, block_width):
     return matrix
 
 class Environment2:
-    def __init__(self):
-        self.environment = retro.make(game='SuperMarioBros-Nes')
-        # self.environment = retro.make(game='NinjaGaiden-Nes')
-        # self.environment = retro.make(game='DonkeyKong-Nes')
-        # self.environment = retro.make(game='Airstriker-Genesis')
+    def __init__(self, game):
+        self.environment = retro.make(game=game)
 
         self.blocks_seen = []
         self.blocks_seen_urls = []
@@ -110,6 +107,17 @@ class Server(http.server.BaseHTTPRequestHandler):
     environments = {}
     blocks_seen = {}
 
+    games_list = sorted([
+        "SuperMarioBros-Nes",
+        "DonkeyKong-Nes",
+        "SectionZ-Nes",
+        "NinjaGaiden-Nes",
+        "Gradius-Nes",
+        "ThunderAndLightning-Nes"
+        "SuperC-Nes",
+        "Spelunker-Nes",
+    ])
+
     actions = {
         'Left':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
         'Right':     [0, 0, 0, 0, 0, 0, 0, 1, 0],
@@ -127,11 +135,18 @@ class Server(http.server.BaseHTTPRequestHandler):
         request_name = request["Request"]
         client_id = request["ClientId"]
 
-        if request_name == "Reset":
+        if request_name == "AvailableGames":
+            return {
+                "AvailableGames": Server.games_list
+            }
+
+        elif request_name == "Reset":
+            game = request["Game"]
+
             if environment := Server.environments.get(client_id):
                 environment.close()
 
-            Server.environments[client_id] = Environment2()
+            Server.environments[client_id] = Environment2(game)
 
             frame, encodings, blocks = Server.environments[client_id].interface_render()
 

@@ -75,12 +75,7 @@
     <div class="spacing"></div>
     <div class="spacing"></div>
     <div class="spacing"></div>
-    <div class="title">Super Mario Bros.</div>
-    <!--div class="title">
-        <select>
-            <option value="Super Mario Bros.">Super Mario Bros.</option>
-        </select>
-    </div-->
+    <div class="title"></div>
     <div class="spacing"></div>
     <div class="spacing"></div>
     <div class="container">
@@ -102,6 +97,7 @@
         </div>
         <div class="spacing"></div>
         <div id="codes-display-modes-selection" class="container-horizontal"></div>
+        <div style="height: 2.1px"></div>
         <div id="blocks-display-modes-selection" class="container-horizontal"></div>
     </div>
 
@@ -117,41 +113,80 @@
 
     <script type="text/babel">
 
-        var codesDisplayModesSelection = document.getElementById('codes-display-modes-selection');
+        class GameSelection extends React.Component {
+            render() {
+                return <select defaultValue={this.props.selectedGame}
+                               onChange={(event) => {/*this.setState({'selectedGame': event.target.value});*/ reset(event.target.value)}}> {
+                        this.props.gamesList .map (
+                            (gameTitle) => <option value={gameTitle} key={gameTitle}>{gameTitle}</option>
+                        ) }
+                </select>;
+            }
+        }
+
+        query({'Request': 'AvailableGames', 'ClientId': 'id'}, function(response) {
+            let games = response['AvailableGames'];
+
+            ReactDOM.render(<GameSelection gamesList={games} selectedGame={games[0]}/>, document.querySelector('.title'));
+        });
+
+        class ModesSelect extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = {mode: props.initialMode};
+            }
+
+            modeUpdate(event) {
+                let newMode = event.target.innerText || event.target.value;
+                this.props.modeUpdate(newMode);
+                this.setState({mode: newMode});
+            }
+
+            cycle(event) {
+                let arr = this.props.modes.concat(this.props.modes);
+                let newMode = arr[arr.indexOf(this.state.mode) + 1];
+                this.props.modeUpdate(newMode);
+                this.setState({mode: newMode});
+            }
+
+            render() {
+                let name = new String(Math.random());
+                return [<span style={{'cursor': 'e-resize', 'userSelect': 'none'}}
+                              onClick={(event) => this.cycle(event)}>{this.props.label}:</span>].concat(this.props.modes .map (
+                    (value) => <span onClick={(event) => this.modeUpdate(event)} style={{'cursor': 'default', 'userSelect': 'none'}}>
+                        <input type="radio" name={name} value={value} checked={value === this.state.mode}
+                               onChange={(event) => this.modeUpdate(event)}></input>
+                        {value}
+                    </span>
+                ));
+            }
+        }
 
         let codesDisplayMode = "show";
-        class CodesButtons extends React.Component {
-            render() {
-                return ["none", "show"] .map (
-                    value => <span>
-                        <input type="radio" name="codes-display-mode" value={value} checked={value === codesDisplayMode}
-                               onChange={() => {codesDisplayMode = value; this.forceUpdate(); colorEncodingsTransparent = {}; frameRender()}}></input>
-                        <span>{value}</span>
-                    </span>
-                );
-            }
-        }
-        ReactDOM.render(["Codes:"].concat(<CodesButtons />), codesDisplayModesSelection);
+        let codesModeUpdate = (newMode) => {
+            codesDisplayMode = newMode;
+            colorEncodingsTransparent = {}; 
+            setTimeout(frameRender, 10);
+        };
+        ReactDOM.render(<ModesSelect modes={["none", "show"]} label="Codes"
+                                     initialMode={codesDisplayMode} modeUpdate={codesModeUpdate} />,
+                        document.getElementById('codes-display-modes-selection'));
 
-        var blocksDisplayModesSelection = document.getElementById('blocks-display-modes-selection');
 
         let blocksDisplayMode = "translucent";
-        class BlocksDisplayModesButtons extends React.Component {
-            render() {
-                return ["none", "translucent", "solid"] .map (
-                    value => <span>
-                        <input type="radio" name="blocks-display-mode" value={value} checked={value === blocksDisplayMode}
-                               onChange={() => {blocksDisplayMode = value; this.forceUpdate(); colorEncodingsTransparent = {}; frameRender()}}></input>
-                        <span>{value}</span>
-                    </span>
-                );
-            }
+        let blocksModeUpdate = (newMode) => {
+            blocksDisplayMode = newMode;
+            colorEncodingsTransparent = {};
+            setTimeout(frameRender, 10);
         }
-        ReactDOM.render(["Blocks:"].concat(<BlocksDisplayModesButtons />), blocksDisplayModesSelection);
+        ReactDOM.render(<ModesSelect modes={["none", "translucent", "solid"]} label="Blocks"
+                                     initialMode={blocksDisplayMode} modeUpdate={blocksModeUpdate} />,
+                        document.getElementById('blocks-display-modes-selection'));
 
-        function reset() {
+        function reset(game) {
             query({
                 "Request": "Reset",
+                "Game": game,
                 "ClientId": "id"
             }, function(response) {
                 let {Observation: obs,
@@ -217,30 +252,11 @@
         function blocksRender(blocksUrls) {
             consoleElement.innerText = blocksUrls.length;
 
-            var blocksElement = document.getElementById('blocks');
-
-            // var list = document.createElement('div');
             var list = <div>
                 {blocksUrls .map (url => <img key={url} src={url} />)}
             </div>;
 
-            ReactDOM.render(list, blocksElement);
-        }
-
-        function blocksRender0(blocksUrls) {
-            consoleElement.innerText = blocksUrls.length;
-
-            var blocksElement = document.getElementById('blocks');
-
-            var list = document.createElement('div');
-            for (var url of blocksUrls) {
-                var img = document.createElement('img');
-                img.setAttribute('src', url);
-
-                list.appendChild(img);
-            }
-
-            blocksElement.replaceChild(list, blocksElement.firstChild);
+            ReactDOM.render(list, document.getElementById('blocks'));
         }
 
         var lastFrame = null;
@@ -269,7 +285,7 @@
             var encodings = encodings.map(t => (t*10).toFixed(2)); 
 
             let blocksAlpha = {'none': 0, 'translucent': 0.3, 'solid': 1}[blocksDisplayMode];
-            let codesAlpha = {'none': 0, 'show': 0.5}[codesDisplayMode];
+            let codesAlpha = {'none': 0, 'show': 0.55}[codesDisplayMode];
 
             context.font = '12px serif';
             context.fillStyle = 'yellow';
@@ -277,6 +293,8 @@
             context.lineWidth = '0.1px';
 
             const hash = function(str, seed = 0) {
+                // "Generate a Hash from string in Javascript"
+                //    https://stackoverflow.com/a/52171480 
                 let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
                 for (let i = 0, ch; i < str.length; i++) {
                     ch = str.charCodeAt(i);
@@ -330,9 +348,10 @@
                     index += 1;
                 }
             }
+
         }
 
-        reset();
+        reset("SuperMarioBros-Nes");
 
     </script>
 

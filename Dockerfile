@@ -60,13 +60,12 @@ RUN pip install -U scikit-learn
 ENV PYTHONPATH="${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-${py4j_version}-src.zip"
 # ENV SPARK_OPTS="--driver-java-options=-Xms1024M --driver-java-options=-Xmx4096M --driver-java-options=-Dlog4j.logLevel=info"
 
-
 WORKDIR /workfolder
 
 # RUN Xvfb :99 &
 # ENV DISPLAY=:99
 
-COPY ["Super Mario Bros..nes", "/workfolder"]
+COPY ["roms", "/workfolder"]
 
 RUN python3 -m retro.import /workfolder
 
