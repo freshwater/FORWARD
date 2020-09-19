@@ -6,7 +6,11 @@
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	
-	<link rel="shortcut icon" type="image/x-icon" href="images/favicon.ico" />
+    <link rel="shortcut icon" type="image/x-icon" href="images/favicon.png" />
+
+    <script src="https://unpkg.com/react@16/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
 
     <style>
         html, body, #map {
@@ -72,6 +76,11 @@
     <div class="spacing"></div>
     <div class="spacing"></div>
     <div class="title">Super Mario Bros.</div>
+    <!--div class="title">
+        <select>
+            <option value="Super Mario Bros.">Super Mario Bros.</option>
+        </select>
+    </div-->
     <div class="spacing"></div>
     <div class="spacing"></div>
     <div class="container">
@@ -91,18 +100,54 @@
             <button onclick="action('Crouch')">CROUCH</button> &nbsp;
             <button onclick="action('Jump')">JUMP</button>
         </div>
+        <div class="spacing"></div>
+        <div id="codes-display-modes-selection" class="container-horizontal"></div>
+        <div id="blocks-display-modes-selection" class="container-horizontal"></div>
     </div>
 
     <div class="spacing"></div>
     <div class="container-horizontal">
         <div id="console"></div>
+        <div id="console1"></div>
     </div>
 
     <div class="container-horizontal">
         <div id="blocks"><div></div></div>
     </div>
 
-    <script>
+    <script type="text/babel">
+
+        var codesDisplayModesSelection = document.getElementById('codes-display-modes-selection');
+
+        let codesDisplayMode = "show";
+        class CodesButtons extends React.Component {
+            render() {
+                return ["none", "show"] .map (
+                    value => <span>
+                        <input type="radio" name="codes-display-mode" value={value} checked={value === codesDisplayMode}
+                               onChange={() => {codesDisplayMode = value; this.forceUpdate(); colorEncodingsTransparent = {}; frameRender()}}></input>
+                        <span>{value}</span>
+                    </span>
+                );
+            }
+        }
+        ReactDOM.render(["Codes:"].concat(<CodesButtons />), codesDisplayModesSelection);
+
+        var blocksDisplayModesSelection = document.getElementById('blocks-display-modes-selection');
+
+        let blocksDisplayMode = "translucent";
+        class BlocksDisplayModesButtons extends React.Component {
+            render() {
+                return ["none", "translucent", "solid"] .map (
+                    value => <span>
+                        <input type="radio" name="blocks-display-mode" value={value} checked={value === blocksDisplayMode}
+                               onChange={() => {blocksDisplayMode = value; this.forceUpdate(); colorEncodingsTransparent = {}; frameRender()}}></input>
+                        <span>{value}</span>
+                    </span>
+                );
+            }
+        }
+        ReactDOM.render(["Blocks:"].concat(<BlocksDisplayModesButtons />), blocksDisplayModesSelection);
 
         function reset() {
             query({
@@ -164,18 +209,31 @@
         var context = canvas.getContext("2d");
         context.scale(3, 3);
 
-        var colorEncodings = {}
-        var colorEncodingsTransparent = {}
+        var colorEncodings = {};
+        var colorEncodingsTransparent = {};
 
         var consoleElement = document.getElementById('console');
 
-        function blocksRender(blocks_urls) {
-            consoleElement.innerText = blocks_urls.length;
+        function blocksRender(blocksUrls) {
+            consoleElement.innerText = blocksUrls.length;
+
+            var blocksElement = document.getElementById('blocks');
+
+            // var list = document.createElement('div');
+            var list = <div>
+                {blocksUrls .map (url => <img key={url} src={url} />)}
+            </div>;
+
+            ReactDOM.render(list, blocksElement);
+        }
+
+        function blocksRender0(blocksUrls) {
+            consoleElement.innerText = blocksUrls.length;
 
             var blocksElement = document.getElementById('blocks');
 
             var list = document.createElement('div');
-            for (var url of blocks_urls) {
+            for (var url of blocksUrls) {
                 var img = document.createElement('img');
                 img.setAttribute('src', url);
 
@@ -185,7 +243,14 @@
             blocksElement.replaceChild(list, blocksElement.firstChild);
         }
 
+        var lastFrame = null;
+        var lastEncodings = null;
         function frameRender(frame, encodings) {
+            frame = frame || lastFrame;
+            lastFrame = frame;
+            encodings = encodings || lastEncodings;
+            lastEncodings = encodings;
+
             var width = frame.length;
             var height = frame[0].length;
 
@@ -201,21 +266,44 @@
                 }
             }
 
-
             var encodings = encodings.map(t => (t*10).toFixed(2)); 
+
+            let blocksAlpha = {'none': 0, 'translucent': 0.3, 'solid': 1}[blocksDisplayMode];
+            let codesAlpha = {'none': 0, 'show': 0.5}[codesDisplayMode];
 
             context.font = '12px serif';
             context.fillStyle = 'yellow';
             context.strokeStyle = 'rgba(255, 255, 255, 0.2)';
             context.lineWidth = '0.1px';
 
+            const hash = function(str, seed = 0) {
+                let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+                for (let i = 0, ch; i < str.length; i++) {
+                    ch = str.charCodeAt(i);
+                    h1 = Math.imul(h1 ^ ch, 2654435761);
+                    h2 = Math.imul(h2 ^ ch, 1597334677);
+                }
+                h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
+                h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
+                return 4294967296 * (2097151 & h2) + (h1>>>0);
+            };
+
+            /*let counts = {};
+            for (var i = 0; i < 1000000; i++) {
+                var code = Math.abs(hash(new String(Math.random()))) % 256;
+                counts[code] = (counts[code] || 0) + 1;
+            }
+            document.getElementById('console1').innerText = JSON.stringify(counts);
+            */
+
+            var seed = "abcdefgh";
             for (var encoding of encodings) {
-                var r = Math.round(Math.random()*255);
-                var g = Math.round(Math.random()*255);
-                var b = Math.round(Math.random()*255);
+                var r = Math.abs(hash("red" + seed + new String(encoding))) % 256;
+                var g = Math.abs(hash("green" + seed + new String(encoding))) % 256;
+                var b = Math.abs(hash("blue" + seed + new String(encoding))) % 256;
 
                 colorEncodings[encoding] = colorEncodings[encoding] || 'rgb(' + String([r, g, b]) + ')';
-                colorEncodingsTransparent[encoding] = colorEncodingsTransparent[encoding] || 'rgba(' + String([r, g, b, 0.3]) + ')';
+                colorEncodingsTransparent[encoding] = colorEncodingsTransparent[encoding] || 'rgba(' + String([r, g, b, blocksAlpha]) + ')';
             }
 
             var topChomp = 4;
@@ -236,7 +324,7 @@
             index = 0;
             for (var i = 0 + topChomp*16; i < width + 15 - bottomChomp*16; i+=16) {
                 for (var j = 0; j < height; j+=16) {
-                    context.fillStyle = 'rgba(255, 255, 0, 0.5)';
+                    context.fillStyle = `rgba(255, 255, 0, ${codesAlpha})`;
                     context.fillText(encodings[index], j*2 + 5, i*2 + o + 4);
                     // context.strokeText(encodings[index], j*2 + o / 2, i*2 + o);
                     index += 1;

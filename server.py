@@ -19,6 +19,9 @@ def block_partition(matrix, block_width):
 class Environment2:
     def __init__(self):
         self.environment = retro.make(game='SuperMarioBros-Nes')
+        # self.environment = retro.make(game='NinjaGaiden-Nes')
+        # self.environment = retro.make(game='DonkeyKong-Nes')
+        # self.environment = retro.make(game='Airstriker-Genesis')
 
         self.blocks_seen = []
         self.blocks_seen_urls = []
@@ -113,8 +116,9 @@ class Server(http.server.BaseHTTPRequestHandler):
         'Jump':      [0, 0, 0, 0, 0, 0, 0, 0, 1],
         'None':      [0, 0, 0, 0, 0, 0, 0, 0, 0],
         'Crouch':    [0, 0, 0, 0, 0, 1, 0, 0, 0],
-        'Dash':      [0, 0, 1, 0, 0, 0, 0, 0, 0],
-        'RightDash': [0, 0, 1, 0, 0, 0, 0, 1, 0],
+        # 'Dash':    [0, 0, 1, 0, 0, 0, 0, 0, 0],
+        'Dash':      [1, 0, 0, 0, 0, 0, 0, 0, 0],
+        'RightDash': [1, 0, 0, 0, 0, 0, 0, 1, 0],
         'LeftJump':  [0, 0, 0, 0, 0, 0, 1, 0, 1],
         'RightJump': [0, 0, 0, 0, 0, 0, 0, 1, 1]
     }
