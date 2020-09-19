@@ -4,6 +4,7 @@ import http.server
 import json
 import time
 import torch
+import numpy as np
 import retro
 
 import random
@@ -43,8 +44,9 @@ class Environment2:
         return self.frame # , reward, is_done, information
 
     def close(self):
-        self.environment.render(close=True)
-        self.environment.close()
+        if env := self.environment:
+            env.render(close=True)
+            env.close()
 
     __del__ = close
 
@@ -111,12 +113,26 @@ class Server(http.server.BaseHTTPRequestHandler):
         "SuperMarioBros-Nes",
         "DonkeyKong-Nes",
         "SectionZ-Nes",
+        "BubbleBobble-Nes",
         "NinjaGaiden-Nes",
         "Gradius-Nes",
-        "ThunderAndLightning-Nes"
+        "ThunderAndLightning-Nes",
         "SuperC-Nes",
-        "Spelunker-Nes",
+        "Spelunker-Nes"
     ])
+
+    ## import time
+    ## t0 = time.time()
+    ## games_list = []
+    ## for game in retro.data.list_games():
+    ##     try:
+    ##         if 'Nes' in game:
+    ##             retro.make(game).close()
+    ##             games_list.append(game)
+    ##     except RuntimeError:
+    ##         pass
+    ## print()
+    ## print(f'Game check time {time.time() - t0:0.2f}s')
 
     actions = {
         'Left':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
@@ -131,6 +147,19 @@ class Server(http.server.BaseHTTPRequestHandler):
         'RightJump': [0, 0, 0, 0, 0, 0, 0, 1, 1]
     }
 
+    actions = {
+        'Up':        [0, 0, 0, 0, 1, 0, 0, 0, 0],
+        'Down':      [0, 0, 0, 0, 0, 1, 0, 0, 0],
+        'Left':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
+        'Right':     [0, 0, 0, 0, 0, 0, 0, 1, 0],
+        'None':      [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'B':         [1, 0, 0, 0, 0, 0, 0, 0, 0],
+        'A':         [0, 0, 0, 0, 0, 0, 0, 0, 1],
+        'RightDash': [1, 0, 0, 0, 0, 0, 0, 1, 0],
+        'LeftJump':  [0, 0, 0, 0, 0, 0, 1, 0, 1],
+        'RightJump': [0, 0, 0, 0, 0, 0, 0, 1, 1]
+    }
+
     def request_process(self, request):
         request_name = request["Request"]
         client_id = request["ClientId"]
@@ -139,6 +168,17 @@ class Server(http.server.BaseHTTPRequestHandler):
             return {
                 "AvailableGames": Server.games_list
             }
+
+        elif request_name == "FaviconUrl":
+            import uuid
+
+            image_files_folder = Server.environments[client_id].image_files_folder
+            file_name = f"{image_files_folder}/{uuid.uuid4()}.png"
+            frame, _encodings, _blocks = Server.environments[client_id].interface_render()
+            plt.imsave("/tmp/" + file_name, np.array(frame).astype(np.uint8))
+
+            return file_name
+
 
         elif request_name == "Reset":
             game = request["Game"]
@@ -180,6 +220,8 @@ class Server(http.server.BaseHTTPRequestHandler):
                 'BlockEncodings': encodings,
                 'Blocks': blocks
             }
+
+        raise NotImplementedError(request)
 
 
     def do_POST(self):
