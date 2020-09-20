@@ -17,7 +17,6 @@ RUN pip3 install notebook==5.6.0
 RUN pip3 uninstall --yes tornado
 RUN pip3 install tornado==5.1.1
 
-## RUN DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
 ## RUN pip install sk-video
 ## RUN pip3 install Pillow
 ## RUN pip3 install scikit-image
@@ -72,6 +71,8 @@ WORKDIR /workfolder
 COPY ["roms", "/workfolder"]
 
 RUN python3 -m retro.import /workfolder
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
 
 ENV JUPYTER_TOKEN=token
 

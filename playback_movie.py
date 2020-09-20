@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 import argparse
 import csv
@@ -12,6 +13,12 @@ import sys
 import time
 from concurrent.futures import ProcessPoolExecutor as Executor
 
+# This file was copied from the retro library.
+# Quick hack to increase the video render quality.
+
+nes_shape = np.array([240, 224])
+nes_scale = 4
+
 def playback_movie(emulator, movie, monitor_csv=None, video_file=None, info_file=None, npy_file=None, viewer=None, video_delay=0, lossless=None, record_audio=True):
     ffmpeg_proc = None
     viewer_proc = None
@@ -23,10 +30,10 @@ def playback_movie(emulator, movie, monitor_csv=None, video_file=None, info_file
         vr = video.getsockname()[1]
         input_vformat = [
             '-r', str(emulator.em.get_screen_rate()),
-            '-s', '%dx%d' % emulator.observation_space.shape[1::-1],
+            '-s', '%dx%d' % tuple(nes_shape*nes_scale), # emulator.observation_space.shape[1::-1],
             '-pix_fmt', 'rgb24',
             '-f', 'rawvideo',
-            '-probesize', '32',
+            # '-probesize', '32',
             '-thread_queue_size', '10000',
             '-i', 'tcp://127.0.0.1:%i?listen' % vr
         ]
@@ -51,6 +58,28 @@ def playback_movie(emulator, movie, monitor_csv=None, video_file=None, info_file
         if video_file:
             if not lossless:
                 output = ['-c:a', 'aac', '-b:a', '128k', '-strict', '-2', '-c:v', 'libx264', '-preset', 'slow', '-crf', '17', '-f', 'mp4', '-pix_fmt', 'yuv420p', video_file]
+                output = ['-c:a', 'aac', '-b:a', '192k', '-strict', '-2', '-c:v', 'libx264', '-preset', 'slow',
+                          '-crf', '1',
+                          '-f', 'mp4',
+                          # '-vf', 'scale=iw*0.2:-1',
+                          '-pix_fmt', 'yuv420p', video_file]
+
+                ## output = ['-c:a', 'aac', '-b:a', '192k', '-strict', '-2', # '-c:v', 'libx264',
+                ##           '-preset', 'veryslow',
+                ##           # '-crf', '0',
+                ##           '-f', 'mp4', '-pix_fmt', 'yuv420p',
+                ##           '-vf', 'scale=iw*2:-1', video_file]
+
+                ## # ffmpeg -i input -c:v huffyuv -c:a libmp3lame -b:a 320k output.avi
+                ## # output = ['-c:v', 'huffyuv', '-c:a', 'libmp3lame', '-b:a', '320k', video_file + '.avi']
+
+                ## # ffmpeg -i input.avi -c:v libvpx-vp9 -lossless 1
+                ## output = ['-c:v', 'libvpx-vp9',
+                ##           # '-deadline', 'best',
+                ##           '-deadline', 'realtime',
+                ##           # '-lossless', '1',
+                ##           # '-vf', 'scale=iw*2:-1',
+                ##           video_file] # + '.webm']
             elif lossless == 'mp4':
                 output = ['-c:a', 'aac', '-b:a', '192k', '-strict', '-2', '-c:v', 'libx264', '-preset', 'veryslow', '-crf', '0', '-f', 'mp4', '-pix_fmt', 'yuv444p', video_file]
             elif lossless == 'mp4rgb':
@@ -117,7 +146,10 @@ def playback_movie(emulator, movie, monitor_csv=None, video_file=None, info_file
             keys = [0] * emulator.num_buttons
         else:
             break
+
         display, reward, done, info = emulator.step(keys)
+        display = np.repeat(np.repeat(display, nes_scale, 0), nes_scale, 1)
+
         if info_file:
             info_steps.append(info)
         if movie.players > 1:

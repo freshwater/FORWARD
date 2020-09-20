@@ -102,7 +102,7 @@ class Server(http.server.BaseHTTPRequestHandler):
 
                 return f'/{random_key}/{os.listdir(folder)[0]}'
 
-            if request['ResourceType'] == '.json Action Sequence':
+            elif request['ResourceType'] == '.json Action Sequence':
                 actions_commitment_intervals = Server.environments[client_id].actions_commitment_intervals()
                 actions = sum([[action]*interval for action, interval in actions_commitment_intervals], [])
 
@@ -110,6 +110,29 @@ class Server(http.server.BaseHTTPRequestHandler):
                     file.write(json.dumps(actions))
 
                 return f'/{random_key}.json'
+
+            elif request['ResourceType'] == '.mp4 Replay Video':
+                actions_commitment_intervals = Server.environments[client_id].actions_commitment_intervals()
+                actions = sum([[action]*interval for action, interval in actions_commitment_intervals], [])
+
+                folder = f'/tmp/{random_key}'
+                os.makedirs(folder)
+
+                random_port = random.randint(1024, 65536)
+                environment = retro_server.RetroClient(game=game, port=random_port,
+                                                       bk2_location=folder,
+                                                       actions=actions)
+
+                environment.close()
+                print(os.listdir(folder))
+
+                replay_file = f'/tmp/{random_key}/{os.listdir(folder)[0]}'
+                os.system(f'python3 playback_movie.py {replay_file}')
+                os.system(f'rm {replay_file}')
+                video_file = f'/tmp/{random_key}/{os.listdir(folder)[0]}'
+
+                return f'/{random_key}/{os.listdir(folder)[0]}'
+
 
         elif request_name == "Reset":
             game = request["Game"]
@@ -195,11 +218,22 @@ class Server(http.server.BaseHTTPRequestHandler):
             self.wfile.write(response.encode())
 
         else:
+            file_type = [extension for extension in ['.bk2', '.json', '.mp4', '.png', '.mkv', '.webm']
+                         if extension in self.path][0]
+
             self.send_response(200)
-            self.send_header('Content-type', 'image/png')
-            self.send_header('Cache-Control', 'max-age=30')
-            if any(file_extension in self.path for file_extension in ['.bk2', '.json']):
+
+            if file_type == '.png':
+                self.send_header('Content-type', 'image/png')
+                self.send_header('Cache-Control', 'max-age=30')
+            elif file_type == '.mp4':
+                self.send_header('Content-type', 'video/mp4')
+            elif file_type == '.webm':
+                self.send_header('Content-type', 'video/webm')
+
+            if file_type in ['.bk2', '.json', '.mp4', '.mkv']:
                 self.send_header('Content-Disposition', 'attachment')
+
             self.end_headers()
 
             with open('/tmp' + self.path, 'rb') as file:
