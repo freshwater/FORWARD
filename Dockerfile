@@ -62,6 +62,8 @@ ENV PYTHONPATH="${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-${py4j_versio
 
 RUN pip3 install pyspark
 
+RUN pip3 install requests
+
 WORKDIR /workfolder
 
 # RUN Xvfb :99 &

@@ -11,97 +11,7 @@ import random
 import os
 import matplotlib.pyplot as plt
 
-def block_partition(matrix, block_width):
-    matrix = matrix.reshape(-1, block_width, matrix.shape[0] // block_width, block_width, 3)
-    matrix = matrix.transpose(2, 1).reshape(-1, block_width, block_width, 3)
-
-    return matrix
-
-class Environment2:
-    def __init__(self, game):
-        self.environment = retro.make(game=game)
-
-        self.blocks_seen = []
-        self.blocks_seen_urls = []
-
-        self.encodings = set()
-        self.encodings_frame = set()
-
-        random_key = str(random.random())[2:]
-        self.image_files_folder = random_key
-        os.makedirs('/tmp/' + self.image_files_folder)
-
-        self.frame = self.environment.reset()
-        self.blocks_identify(self.frame)
-        self.frame_index = 0
-
-    def step(self, action, commitment_interval):
-        t0 = time.time()
-        for _ in range(commitment_interval):
-            self.frame, reward, is_done, information = self.environment.step(action)
-            self.frame_index += 1
-        
-        self.blocks_identify(self.frame)
-
-        return self.frame # , reward, is_done, information
-
-    def close(self):
-        if env := self.environment:
-            env.render(close=True)
-            env.close()
-
-    __del__ = close
-
-    def blocks_identify(self, frame):
-        t0 = time.time()
-        obs = torch.tensor(frame)
-
-        obs = torch.cat([obs,
-                         torch.zeros(16, 240, 3)]).long()
-
-        blocks = block_partition(obs, 16)
-
-        blocks = blocks[4*15:-2*15]
-
-        exponent = 2
-
-        asymmetric = torch.linspace(0.5, 1.5, 16*16*3)**3
-        # encodings = [((block.float() / 255 / 16 / 16).sum()**exponent).item() for block in blocks]
-        # encodings = [hash(((block.float() / 255 / 16 / 16).sum()**exponent).item()) % 255 for block in blocks]
-        # encodings = [((block.flatten().float() @ asymmetric / 16 / 16 / 3 / 255) - 0.5).item() for block in blocks]
-        encodings_frame = [((block.flatten().float() @ asymmetric / 16 / 16 / 3 / 255)).item() for block in blocks]
-
-        diffs = set(encodings_frame).difference(self.encodings)
-
-        written = set()
-        for encoding, block in zip(encodings_frame, blocks):
-            if encoding in diffs and encoding not in written:
-                written.add(encoding)
-
-                plt.imsave(f"/tmp/{self.image_files_folder}/{str(encoding)[2:]}.png", block.byte().numpy())
-                self.blocks_seen_urls.append(f"{self.image_files_folder}/{str(encoding)[2:]}.png")
-
-        new_blocks = [block for encoding, block in zip(encodings_frame, blocks)
-                            if encoding in diffs]
-
-        new_blocks = set(tuple(block.flatten().tolist()) for block in new_blocks)
-        new_blocks = [torch.tensor(block).reshape(16, 16, 3) for block in new_blocks]
-
-        # update
-        new_blocks = [block.tolist() for block in new_blocks]
-        self.blocks_seen.extend(new_blocks)
-
-        # if random.random() < 0.1:
-        #     self.blocks_seen = sorted(self.blocks_seen, key=lambda x: tuple(torch.tensor(x).flatten().tolist()))
-
-        self.encodings.update(diffs)
-        self.encodings_frame = encodings_frame
-
-
-    def interface_render(self):
-        self.blocks_seen_urls = sorted(self.blocks_seen_urls)
-        return self.frame.tolist(), list(self.encodings_frame), self.blocks_seen_urls, self.frame_index
-
+import retro_server
 
 
 class Server(http.server.BaseHTTPRequestHandler):
@@ -137,19 +47,6 @@ class Server(http.server.BaseHTTPRequestHandler):
     ## print(f'Game check time {time.time() - t0:0.2f}s')
 
     actions = {
-        'Left':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
-        'Right':     [0, 0, 0, 0, 0, 0, 0, 1, 0],
-        'Jump':      [0, 0, 0, 0, 0, 0, 0, 0, 1],
-        'None':      [0, 0, 0, 0, 0, 0, 0, 0, 0],
-        'Crouch':    [0, 0, 0, 0, 0, 1, 0, 0, 0],
-        # 'Dash':    [0, 0, 1, 0, 0, 0, 0, 0, 0],
-        'Dash':      [1, 0, 0, 0, 0, 0, 0, 0, 0],
-        'RightDash': [1, 0, 0, 0, 0, 0, 0, 1, 0],
-        'LeftJump':  [0, 0, 0, 0, 0, 0, 1, 0, 1],
-        'RightJump': [0, 0, 0, 0, 0, 0, 0, 1, 1]
-    }
-
-    actions = {
         'Up':        [0, 0, 0, 0, 1, 0, 0, 0, 0],
         'Down':      [0, 0, 0, 0, 0, 1, 0, 0, 0],
         'Left':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
@@ -171,16 +68,30 @@ class Server(http.server.BaseHTTPRequestHandler):
                 "AvailableGames": Server.games_list
             }
 
-        elif request_name == "FaviconUrl":
+        elif request_name == "ImageUrl":
             import uuid
 
-            image_files_folder = Server.environments[client_id].image_files_folder
+            image_files_folder = Server.environments[client_id].image_files_folder()
             file_name = f"{image_files_folder}/{uuid.uuid4()}.png"
             frame, _encodings, _blocks, _frame_index = Server.environments[client_id].interface_render()
             plt.imsave("/tmp/" + file_name, np.array(frame).astype(np.uint8))
 
             return file_name
 
+        elif request_name == "ResourceURL":
+            game = request['Game']
+
+            import os
+            os.makedirs('/tmp/bobbity')
+            environment = RetroClient(game=game, bk2_location='/tmp/bobbity')
+
+            for action, commitment_interval in actions_commitment_intervals:
+                environment.step(action, commitment_interval)
+
+            environment.close()
+            print("BOB", os.listdir('/tmp/bobbity'))
+
+            return "NORB"
 
         elif request_name == "Reset":
             game = request["Game"]
@@ -188,7 +99,9 @@ class Server(http.server.BaseHTTPRequestHandler):
             if environment := Server.environments.get(client_id):
                 environment.close()
 
-            Server.environments[client_id] = Environment2(game)
+            random_port = random.randint(1024, 65536)
+            Server.environments[client_id] = retro_server.RetroClient(game=game, port=random_port)
+            print("RETROCLIENT")
 
             frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
 
@@ -215,8 +128,11 @@ class Server(http.server.BaseHTTPRequestHandler):
 
             print("ACTION", action)
 
+            import time
+            t0 = time.time()
             Server.environments[client_id].step(action, commitment_interval)
             frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
+            print("TIME", time.time() - t0)
 
             return {
                 'Observation': frame,
