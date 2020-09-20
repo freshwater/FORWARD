@@ -5,7 +5,7 @@
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	
-    <link rel="shortcut icon" type="image/x-icon" href="images/favicon.png" />
+    <link rel="shortcut icon" type="image/x-icon" href="" />
 
     <script src="https://unpkg.com/react@16/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js" crossorigin></script>
@@ -123,12 +123,14 @@
         <div id="codes-display-modes-selection" class="container-horizontal"></div>
         <div style="height: 2.1px"></div>
         <div id="blocks-display-modes-selection" class="container-horizontal"></div>
-        <div style="height: 5px"></div>
+        <div style="height: 7px"></div>
         <span style="display: flex; flex-direction: row">
         Commitment Interval:&nbsp;<input class="commitment-interval-input" type="number" min="1"  value="6"
                onfocus="event.target.blur()"
                onchange="commitmentInterval = event.target.value"></input>
         </span>
+        <div style="height: 5px"></div>
+        <div class="downloads-selection" style="display: flex; flex-direction: row"></div>
     </div>
 
     <div class="spacing"></div>
@@ -143,6 +145,10 @@
 
     <script type="text/babel">
 
+        "🎲 ⚀ ⚁ ⚂ ⚃ ⚄ ⚅";
+
+        let clientId = new String(Math.random()).substring(2);
+
         class GameSelection extends React.Component {
             render() {
                 return <select defaultValue={this.props.selectedGame}
@@ -154,7 +160,7 @@
             }
         }
 
-        query({'Request': 'AvailableGames', 'ClientId': 'id'}, function(response) {
+        query({'Request': 'AvailableGames', 'ClientId': clientId}, function(response) {
             let games = response['AvailableGames'];
             ReactDOM.render(<GameSelection gamesList={games} selectedGame={"SuperMarioBros-Nes"}/>, document.querySelector('.title'));
         });
@@ -212,16 +218,48 @@
                                      initialMode={blocksDisplayMode} modeUpdate={blocksModeUpdate} />,
                         document.getElementById('blocks-display-modes-selection'));
 
+
+        class DownloadsSelection extends React.Component {
+            render() {
+                return <select id={this.props.id} defaultValue={this.props.initialValue}
+                               onChange={(event) => this.props.onChange}> {
+                        this.props.values .map (
+                            (value) => <option value={value} key={value}>{value}</option>
+                        ) }
+                </select>;
+            }
+        }
+        let downloadId = new String(Math.random()).substring(2);
+        ReactDOM.render([<DownloadsSelection id={downloadId} values={[".bk2 Replay Data", ".mp4 Replay Video", ".json Action Sequence"]}
+                                             initialValue=".mp4 Replay Video" />,
+                         <span>&nbsp;</span>,
+                         <button onClick={(event) => download(document.getElementById(downloadId).value)}>Download</button>],
+                        document.querySelector('.downloads-selection'));
+
+
+        function download(resourceType) {
+            console.log('resourceType', resourceType);
+
+            query({
+                "Request": "ResourceURL",
+                "ResourceType": resourceType,
+                "Game": lastSelectedGame,
+                "ClientId": clientId
+            }, function(response) {
+                console.log("r.", response)
+                window.location = response;
+            });
+        }
+
         let lastSelectedGame = null;
-        function reset(game) {
-            game = game || lastSelectedGame;
+        function reset(game=lastSelectedGame) {
             lastSelectedGame = game;
             document.title = game;
 
             query({
                 "Request": "Reset",
                 "Game": game,
-                "ClientId": "id"
+                "ClientId": clientId
             }, function(response) {
                 let {Observation: obs,
                      BlockEncodings: encodings,
@@ -231,8 +269,8 @@
                 frameRender(obs, encodings, frameIndex);
                 blocksRender(blocks)
                 query({
-                    "Request": "FaviconUrl",
-                    "ClientId": "id"
+                    "Request": "ImageUrl",
+                    "ClientId": clientId
                 }, function(faviconUrl) {
                     let link = document.querySelector('head link');
                     link.setAttribute('href', faviconUrl);
@@ -241,17 +279,19 @@
         }
 
         var commitmentInterval = 6;
-        function action(action_) {
+        function action(action_, onResponse=function(){}) {
             query({
                 "Request": "Action",
                 "Action": action_,
                 "CommitmentInterval": parseInt(commitmentInterval, 10),
-                "ClientId": "id"
+                "ClientId": clientId
             }, function(response) {
                 let {Observation: obs,
                      BlockEncodings: encodings,
                      Blocks: blocks,
                      FrameIndex: frameIndex} = response;
+
+                onResponse();
 
                 frameRender(obs, encodings, frameIndex);
                 blocksRender(blocks);
@@ -260,17 +300,19 @@
 
         var intervalId = null;
 
+        var isRunning = false;
         function run(button) {
-            var command = button.innerText;
-            button.innerText = command === 'RUN' ? 'STOP' : 'RUN';
+            button.innerText = button.innerText === 'RUN' ? 'STOP' : 'RUN';
+            isRunning = button.innerText === 'STOP';
 
-            if (command === 'RUN') {
-                intervalId = setInterval(function() {
-                    action('None');
-                }, 250);
-            } else {
-                clearInterval(intervalId);
+            function doNone() {
+                console.log("PER", isRunning);
+                if (isRunning) {
+                    action('None', doNone);
+                }
             }
+
+            doNone();
         }
 
         function query(request, process) {

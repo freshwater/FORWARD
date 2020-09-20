@@ -79,19 +79,37 @@ class Server(http.server.BaseHTTPRequestHandler):
             return file_name
 
         elif request_name == "ResourceURL":
+            client_id = request['ClientId']
             game = request['Game']
 
-            import os
-            os.makedirs('/tmp/bobbity')
-            environment = RetroClient(game=game, bk2_location='/tmp/bobbity')
+            random_key = random.random()
+            # todo convenient file name
 
-            for action, commitment_interval in actions_commitment_intervals:
-                environment.step(action, commitment_interval)
+            if request['ResourceType'] == '.bk2 Replay Data':
+                actions_commitment_intervals = Server.environments[client_id].actions_commitment_intervals()
+                actions = sum([[action]*interval for action, interval in actions_commitment_intervals], [])
 
-            environment.close()
-            print("BOB", os.listdir('/tmp/bobbity'))
+                folder = f'/tmp/{random_key}'
+                os.makedirs(folder)
 
-            return "NORB"
+                random_port = random.randint(1024, 65536)
+                environment = retro_server.RetroClient(game=game, port=random_port,
+                                                       bk2_location=folder,
+                                                       actions=actions)
+
+                environment.close()
+                print(os.listdir(folder))
+
+                return f'/{random_key}/{os.listdir(folder)[0]}'
+
+            if request['ResourceType'] == '.json Action Sequence':
+                actions_commitment_intervals = Server.environments[client_id].actions_commitment_intervals()
+                actions = sum([[action]*interval for action, interval in actions_commitment_intervals], [])
+
+                with open(f'/tmp/{random_key}.json', 'w') as file:
+                    file.write(json.dumps(actions))
+
+                return f'/{random_key}.json'
 
         elif request_name == "Reset":
             game = request["Game"]
@@ -180,9 +198,9 @@ class Server(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'image/png')
             self.send_header('Cache-Control', 'max-age=30')
+            if any(file_extension in self.path for file_extension in ['.bk2', '.json']):
+                self.send_header('Content-Disposition', 'attachment')
             self.end_headers()
-
-            print(".", end="")
 
             with open('/tmp' + self.path, 'rb') as file:
                 self.wfile.write(file.read())

@@ -28,7 +28,7 @@ def block_partition(matrix, block_width):
     return matrix
 
 class Environment3:
-    def __init__(self, game, bk2_location=None):
+    def __init__(self, game, actions=[], bk2_location=None):
         self.environment = retro.make(game=game, record=bk2_location)
 
         self.blocks_seen = []
@@ -41,12 +41,29 @@ class Environment3:
         self.image_files_folder = random_key
         os.makedirs('/tmp/' + self.image_files_folder)
 
+        if bk2_location:
+            # Not sure how retro's recording mechanism works, but this seems
+            # to force a bk2 file to be written in the bk2_location.
+            self.environment.unwrapped.record_movie(f'/tmp/unused-{random_key}._bk2')
+
         self.frame = self.environment.reset()
         self.blocks_identify(self.frame)
         self.frame_index = 0
 
         self.actions_all = []
         self.commitment_intervals_all = []
+
+        if actions:
+            # note this produces different encodings, since the default
+            # encodings are only sampled at the intervals and not on every step
+            # for now, mainly meant to be used in generating replays
+            # for action in actions:
+            #     self.step(action, commitment_interval=1)
+            for action in actions:
+                self.environment.step(action)
+
+    def actions_commitment_intervals(self):
+        return list(zip(self.actions_all, self.commitment_intervals_all))
 
     def step(self, action, commitment_interval):
         for _ in range(commitment_interval):
@@ -61,11 +78,13 @@ class Environment3:
         return self.frame # , reward, is_done, information
 
     def close(self):
+        self.environment.unwrapped.stop_record()
         if env := self.environment:
             env.render(close=True)
             env.close()
+            # del self.environment
 
-    __del__ = close
+    # __del__ = close
 
     def blocks_identify(self, frame):
         obs = torch.tensor(frame)
@@ -118,7 +137,7 @@ class Environment3:
 
 
 class RetroClient:
-    def __init__(self, port, game):
+    def __init__(self, port, game, actions=[], bk2_location=None):
         self.url = f'http://localhost:{port}'
 
         import subprocess
@@ -132,12 +151,14 @@ class RetroClient:
                 import time
                 time.sleep(0.05)
 
-        self.initialize(game)
+        self.initialize(game, actions, bk2_location)
 
-    def initialize(self, game):
+    def initialize(self, game, actions, bk2_location):
         return post_request_json(self.url, {
             "Request": "Initialize",
-            "Game": game
+            "Game": game,
+            "Actions": actions,
+            "bk2_location": bk2_location
         })
 
     def step(self, action, commitment_interval):
@@ -173,6 +194,12 @@ class RetroClient:
             "Property": "image_files_folder"
         }).json()
 
+    def actions_commitment_intervals(self):
+        return requests.post(self.url, json={
+            "Request": "MethodExecute",
+            "Method": "actions_commitment_intervals",
+            "Arguments": []
+        }).json()
 
     """
     def execute(self, body):
@@ -245,14 +272,15 @@ class Server(http.server.BaseHTTPRequestHandler):
         respond = lambda response: self.wfile.write(json.dumps(response).encode())
 
         if request["Request"] == 'Initialize':
-            environment1 = Environment3(game=request['Game'])
+            bk2_location = request["bk2_location"]
+            environment1 = Environment3(game=request['Game'], actions=request["Actions"], bk2_location=bk2_location)
 
             respond("AllGood")
 
         elif request["Request"] == 'MethodExecute':
             method = request["Method"]
             arguments = request["Arguments"]
-            print("GOT-", method, arguments, flush=True)
+            print("MethodExecute-", method, arguments, flush=True)
 
             responseo = environment1.__getattribute__(method)(*arguments)
             if isinstance(responseo, np.ndarray):
