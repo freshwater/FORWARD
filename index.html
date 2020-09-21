@@ -66,6 +66,10 @@
         button {
             user-select: none;
         }
+
+        .download-in-progress {
+            cursor: wait;
+        }
     </style>
 	
 </head>
@@ -129,8 +133,10 @@
                onfocus="event.target.blur()"
                onchange="commitmentInterval = event.target.value"></input>
         </span>
-        <div style="height: 5px"></div>
+        <div style="height: 7px"></div>
         <div class="downloads-selection" style="display: flex; flex-direction: row"></div>
+        <div style="height: 7px"></div>
+        <!--Upload: <input type="file" id="input" /-->
     </div>
 
     <div class="spacing"></div>
@@ -230,24 +236,42 @@
             }
         }
         let downloadId = new String(Math.random()).substring(2);
-        ReactDOM.render([<DownloadsSelection id={downloadId} values={[".bk2 Replay Data", ".mp4 Replay Video", ".json Action Sequence"]}
+        ReactDOM.render([<DownloadsSelection id={downloadId} values={[".mp4 Replay Video", ".bk2 Replay Data", ".json Action Sequence"]}
                                              initialValue=".mp4 Replay Video" />,
                          <span>&nbsp;</span>,
-                         <button onClick={(event) => download(document.getElementById(downloadId).value)}>Download</button>],
+                         <button onClick={(event) => download(document.getElementById(downloadId).value, event)}>Download</button>],
                         document.querySelector('.downloads-selection'));
 
 
-        function download(resourceType) {
+        function download(resourceType, event) {
             console.log('resourceType', resourceType);
+
+            let body = document.body;
+            let element = event.target;
+            element.classList.add("download-in-progress");
+            body.classList.add("download-in-progress");
+            element.disabled = true;
 
             query({
                 "Request": "ResourceURL",
                 "ResourceType": resourceType,
                 "Game": lastSelectedGame,
                 "ClientId": clientId
-            }, function(response) {
-                console.log("r.", response)
-                window.location = response;
+            }, function(fileUrl) {
+                function onFileExists() {
+                    window.location = fileUrl;
+                    element.classList.remove("download-in-progress");
+                    body.classList.remove("download-in-progress");
+                    element.disabled = false;
+                }
+
+                let intervalId = setInterval(function() {
+                    fetch(fileUrl)
+                    .then(function() {
+                        clearInterval(intervalId);
+                        onFileExists();
+                    })
+                }, 250);
             });
         }
 

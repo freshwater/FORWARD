@@ -56,9 +56,14 @@ def playback_movie(emulator, movie, monitor_csv=None, video_file=None, info_file
         stdout = None
         output = []
         if video_file:
+            print("VIxxxx", video_file)
+            print("VIxxxx", os.path.dirname(video_file))
+            video_file = os.path.dirname(video_file) + "/video_being_written.mp4"
             if not lossless:
                 output = ['-c:a', 'aac', '-b:a', '128k', '-strict', '-2', '-c:v', 'libx264', '-preset', 'slow', '-crf', '17', '-f', 'mp4', '-pix_fmt', 'yuv420p', video_file]
-                output = ['-c:a', 'aac', '-b:a', '192k', '-strict', '-2', '-c:v', 'libx264', '-preset', 'slow',
+                output = ['-c:a', 'aac', '-b:a', '192k', '-strict', '-2', '-c:v', 'libx264',
+                          # '-preset', 'slow',
+                          # '-preset', 'ultrafast',
                           '-crf', '1',
                           '-f', 'mp4',
                           # '-vf', 'scale=iw*0.2:-1',

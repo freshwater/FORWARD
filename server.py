@@ -127,11 +127,16 @@ class Server(http.server.BaseHTTPRequestHandler):
                 print(os.listdir(folder))
 
                 replay_file = f'/tmp/{random_key}/{os.listdir(folder)[0]}'
-                os.system(f'python3 playback_movie.py {replay_file}')
-                os.system(f'rm {replay_file}')
-                video_file = f'/tmp/{random_key}/{os.listdir(folder)[0]}'
+                import subprocess
+                video_being_written = f'/tmp/{random_key}/video_being_written.mp4'
+                video_file = f'/tmp/{random_key}/video.mp4'
+                # It looks like ffmpeg streams to the file or otherwise takes a bit of time to write it.
+                # Use && so that the completed video file only exists after the writing is fully complete.
+                # This makes it easier to just poll for the file on the client.
+                subprocess.Popen(f'python3 playback_movie.py {replay_file} && mv {video_being_written} {video_file}',
+                                 shell=True)
 
-                return f'/{random_key}/{os.listdir(folder)[0]}'
+                return f'/{random_key}/video.mp4'
 
 
         elif request_name == "Reset":
@@ -220,6 +225,10 @@ class Server(http.server.BaseHTTPRequestHandler):
         else:
             file_type = [extension for extension in ['.bk2', '.json', '.mp4', '.png', '.mkv', '.webm']
                          if extension in self.path][0]
+
+            if not os.path.exists('/tmp' + self.path):
+                self.send_response(404)
+                return
 
             self.send_response(200)
 
