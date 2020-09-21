@@ -74,6 +74,8 @@ RUN python3 -m retro.import /workfolder
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
 
+COPY ["static/GitHub-Mark-64px.png", "/tmp/"]
+
 ENV JUPYTER_TOKEN=token
 
 # ENTRYPOINT ["/bin/bash", "-c", "DISPLAY=:99 jupyter notebook --ip=0.0.0.0 --allow-root"]

@@ -67,9 +67,39 @@
             user-select: none;
         }
 
+        .control-locked {
+            background: #5894f8;
+            color: white;
+            /*border: 2px dashed blue;*/
+        }
+
+        .reset-button {
+            /*background: none;*/
+            border: none;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+        .reset-button:hover {
+            background: white;
+            border: 1px solid gray;
+            color: red;
+        }
+
         .download-in-progress {
             cursor: wait;
         }
+
+        .github-icon:not(:hover) {
+            opacity: 0.5;
+            transition: opacity 0.3s;
+        }
+
+        .github-icon:hover {
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+
     </style>
 	
 </head>
@@ -86,19 +116,7 @@
     </div>
     <div class="spacing"></div>
     <div class="container">
-        <!--div class="container-horizontal">
-            <button onclick="reset()">RESET</button> &nbsp;
-            <button onclick="action('Left')">LEFT</button> &nbsp;
-            <button onclick="action('Right')">RIGHT</button> &nbsp;
-            <button onclick="action('RightDash')">RIGHT_DASH</button> &nbsp;
-            <button onclick="action('RightJump')">RIGHT_JUMP</button> &nbsp;
-            <button onclick="action('Dash')">DASH</button> &nbsp;
-            <button onclick="action('None')">NONE</button> &nbsp;
-            <button onclick="run(event.target)">RUN</button> &nbsp;
-            <button onclick="action('Crouch')">CROUCH</button> &nbsp;
-            <button onclick="action('Jump')">JUMP</button>
-        </div-->
-        <div class="container-horizontal">
+        <div class="container-horizontal controls">
             <span style="display: flex; flex-direction: column; align-items: center;">
                 <button onclick="action('Up')" style="margin-bottom: 1px">UP</button>
                 <span style="display: flex; flex-direction: row">
@@ -111,10 +129,10 @@
             <button onclick="action('A')">A</button>
         </div>
         <div class="spacing"></div>
-        <div class="container-horizontal">
-            <button onclick="reset()">RESET</button> &nbsp;
+        <div class="container-horizontal controls">
+            <button onclick="reset()" class="reset-button">RESET</button> &nbsp;
             <button onclick="action('None')">NONE</button> &nbsp;
-            <button onclick="run(event.target)">RUN</button> &nbsp;
+            <!--button onclick="run(event.target)">RUN</button> &nbsp; -->
         </div>
         <script>
             var buttons = document.querySelectorAll('button[onclick]');
@@ -149,6 +167,9 @@
         <div id="blocks"><div></div></div>
     </div>
 
+    <div style="height: 70px"></div>
+    <center><a href="https://github.com/freshwater/FORWARD"><img class="github-icon" src="GitHub-Mark-64px.png" width="24" height="24" /></a></center>
+
     <script type="text/babel">
 
         "🎲 ⚀ ⚁ ⚂ ⚃ ⚄ ⚅";
@@ -170,6 +191,93 @@
             let games = response['AvailableGames'];
             ReactDOM.render(<GameSelection gamesList={games} selectedGame={"SuperMarioBros-Nes"}/>, document.querySelector('.title'));
         });
+
+        let actionsMap = {
+            'UP':        [0, 0, 0, 0, 1, 0, 0, 0, 0],
+            'DOWN':      [0, 0, 0, 0, 0, 1, 0, 0, 0],
+            'LEFT':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
+            'RIGHT':     [0, 0, 0, 0, 0, 0, 0, 1, 0],
+            'NONE':      [0, 0, 0, 0, 0, 0, 0, 0, 0],
+            'B':         [1, 0, 0, 0, 0, 0, 0, 0, 0],
+            'A':         [0, 0, 0, 0, 0, 0, 0, 0, 1],
+        };
+
+        let lockedAction = actionsMap['NONE'];
+        let activeAction = actionsMap['NONE'];
+
+        function actionsAdd(action1, action2) {
+            return action1 .map ((_, i) => action1[i] + action2[i])
+        }
+
+        function actionsSubtract(action1, action2) {
+            return action1 .map ((_, i) => action1[i] - action2[i])
+        }
+
+        let lockedButtonsCount = 0;
+
+        let runIntervalId = null;
+
+        let controls = [...document.querySelectorAll('.controls button:not(.reset-button)')];
+        controls .map (function(button) {
+            let buttonOnClick = button.onclick;
+            button.onclick = null;
+
+            let state = "Unpressed";
+            let timeout = null;
+
+            // todo: counterstates
+            button.addEventListener("mousedown", function(event) {
+                if (state === "Unpressed") {
+                    state = "Down";
+
+                    timeout = setTimeout(function() {
+                        if (state === "Down") {
+                            state = "Locked";
+                            lockedButtonsCount += 1;
+                            lockedAction = actionsAdd(lockedAction, actionsMap[button.innerText]);
+                            button.classList.add("control-locked");
+
+                            if (lockedButtonsCount === 1) {
+                                runContinuous();
+                            }
+                        }
+                    }, 600);
+
+                } else if (state === "Locked") {
+                    state = "Unpressed";
+                    lockedButtonsCount -= 1;
+                    button.classList.remove("control-locked");
+                    lockedAction = actionsSubtract(lockedAction, actionsMap[button.innerText]);
+                }
+            });
+
+            button.addEventListener("mouseup", function(event) {
+                if (state === "Down") {
+                    state = "Unpressed";
+                    activeAction = actionsMap[button.innerText];
+                    clearTimeout(timeout);
+
+                    if (lockedButtonsCount === 0) {
+                        buttonOnClick();
+                    } else {
+                        /*runContinuous();*/
+                    }
+                }
+            });
+        });
+
+        function runContinuous() {
+            function doAction() {
+                let action1 = actionsAdd(lockedAction, activeAction);
+                activeAction = actionsMap['NONE'];
+
+                if (lockedButtonsCount > 0) {
+                    action(action1, doAction);
+                }
+            }
+
+            doAction();
+        }
 
         class ModesSelect extends React.Component {
             constructor(props) {
@@ -243,8 +351,12 @@
                         document.querySelector('.downloads-selection'));
 
 
+        var currentFrameIndex = 0;
         function download(resourceType, event) {
             console.log('resourceType', resourceType);
+            if (currentFrameIndex === 0) {
+                return ;
+            }
 
             let body = document.body;
             let element = event.target;
@@ -271,7 +383,7 @@
                         clearInterval(intervalId);
                         onFileExists();
                     })
-                }, 250);
+                }, 350);
             });
         }
 
@@ -289,6 +401,8 @@
                      BlockEncodings: encodings,
                      Blocks: blocks,
                      FrameIndex: frameIndex} = response;
+
+                currentFrameIndex = frameIndex;
 
                 frameRender(obs, encodings, frameIndex);
                 blocksRender(blocks)
@@ -315,28 +429,13 @@
                      Blocks: blocks,
                      FrameIndex: frameIndex} = response;
 
+                currentFrameIndex = frameIndex;
+
                 onResponse();
 
                 frameRender(obs, encodings, frameIndex);
                 blocksRender(blocks);
             });
-        }
-
-        var intervalId = null;
-
-        var isRunning = false;
-        function run(button) {
-            button.innerText = button.innerText === 'RUN' ? 'STOP' : 'RUN';
-            isRunning = button.innerText === 'STOP';
-
-            function doNone() {
-                console.log("PER", isRunning);
-                if (isRunning) {
-                    action('None', doNone);
-                }
-            }
-
-            doNone();
         }
 
         function query(request, process) {
@@ -380,8 +479,9 @@
             var width = frame.length;
             var height = frame[0].length;
 
-            canvas.style.width = 3*width*8/7 + 'px';
-            canvas.style.height = 3*width + 'px';
+            var scale = 2.7;
+            canvas.style.width = scale*width*8/7 + 'px';
+            canvas.style.height = scale*width + 'px';
 
             for (var i = 0; i < width; i++) {
                 for (var j = 0; j < height; j++) {
@@ -470,7 +570,7 @@
 
     </script>
 
-    <div style="height: 100px"></div>
+    <div style="height: 25px"></div>
 
 </body>
 </html>

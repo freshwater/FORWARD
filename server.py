@@ -15,8 +15,8 @@ import retro_server
 
 
 class Server(http.server.BaseHTTPRequestHandler):
-    with open('index.html') as file:
-        html_index_file = file.read()
+    # with open('static/index.html') as file:
+    #     html_index_file = file.read()
 
     environments = {}
     blocks_seen = {}
@@ -160,7 +160,11 @@ class Server(http.server.BaseHTTPRequestHandler):
 
         elif request_name == "Action":
             commitment_interval = request["CommitmentInterval"]
-            action = Server.actions[request["Action"]]
+
+            if isinstance(request["Action"], list):
+                action = request["Action"]
+            else:
+                action = Server.actions[request["Action"]]
 
             environment = Server.environments[client_id]
 
@@ -215,7 +219,7 @@ class Server(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/html')
             self.end_headers()
 
-            with open('index.html') as file:
+            with open('static/index.html') as file:
                 Server.html_index_file = file.read()
 
             response = Server.html_index_file
