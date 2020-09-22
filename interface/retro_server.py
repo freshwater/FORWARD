@@ -138,6 +138,61 @@ class Environment3:
 
 class RetroClient:
     def __init__(self, port, game, actions=[], bk2_location=None):
+        import multiprocessing as mp
+
+        self.parent_connection, child_connection = mp.Pipe()
+        process = mp.Process(target=RetroClient.dispatch, args=[child_connection])
+        process.start()
+
+        self.parent_connection.send(['__init__', {'game': game, 'actions': actions, 'bk2_location': bk2_location}])
+        self.parent_connection.recv()
+        self.parent_connection.send(['print', {}])
+        self.parent_connection.recv()
+
+    def dispatch(connection):
+        while not connection.closed:
+            method, kwargs = connection.recv()
+
+            if method == '__init__':
+                environment = Environment3(**kwargs)
+                connection.send(None)
+
+            elif method == 'print':
+                print('inr', environment)
+                connection.send(None)
+
+            elif method == '[get_attribute]':
+                result = environment.__getattribute__(kwargs['attribute'])
+                connection.send(result)
+
+            else:
+                result = environment.__getattribute__(method)(**kwargs)
+                connection.send(result)
+
+    def step(self, action, commitment_interval):
+        self.parent_connection.send(['step', {'action': action,
+                                              'commitment_interval': commitment_interval}])
+        return self.parent_connection.recv()
+
+    def interface_render(self):
+        self.parent_connection.send(['interface_render', {}])
+        return self.parent_connection.recv()
+
+    def close(self):
+        self.parent_connection.send(['close', {}])
+        return self.parent_connection.recv()
+
+    def image_files_folder(self):
+        self.parent_connection.send(['[get_attribute]', {'attribute': 'image_files_folder'}])
+        return self.parent_connection.recv()
+
+    def actions_commitment_intervals(self):
+        self.parent_connection.send(['actions_commitment_intervals', {}])
+        return self.parent_connection.recv()
+
+
+class RetroClient0:
+    def __init__(self, port, game, actions=[], bk2_location=None):
         self.url = f'http://localhost:{port}'
 
         import subprocess
