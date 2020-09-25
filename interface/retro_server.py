@@ -4,21 +4,12 @@ import http.server
 import sys
 
 import torch
-import random
+import uuid
 import numpy as np
 import retro
 import os
 
 import matplotlib.pyplot as plt
-
-def post_request_json(url, data):
-    import urllib
-
-    req = urllib.request.Request(url, bytes(json.dumps(data), encoding='utf-8'))
-    r = urllib.request.urlopen(req).read()
-
-    return json.loads(r)
-
 
 def block_partition(matrix, block_width):
     matrix = matrix.reshape(-1, block_width, matrix.shape[0] // block_width, block_width, 3)
@@ -36,7 +27,7 @@ class Environment3:
         self.encodings = set()
         self.encodings_frame = set()
 
-        random_key = str(random.random())[2:]
+        random_key = str(uuid.uuid4())
         self.image_files_folder = random_key
         os.makedirs('/tmp/' + self.image_files_folder)
 
@@ -146,7 +137,7 @@ class Environment3:
         import torch
         import torch.nn.functional as F
 
-        import forward
+        import forward as fwd
 
         # self.blocks_seen_urls = sorted(self.blocks_seen_urls)
         # return self.frame.tolist(), list(self.encodings_frame), self.blocks_seen_urls, self.frame_index
@@ -171,12 +162,19 @@ class Environment3:
         output = [[str(e)[:4] for e in row]
                   for row in output.tolist()]
 
+        raster = fwd.Raster(data=np.random.rand(20, 20),
+                            elements=[
+                                fwd.Region(geometry=[[0, 0], [5, 5]],
+                                           color=[1, 0, 0, 0.5],
+                                           label="HEY!")
+                            ])
+
         # return [self.frame[::6,::6,0], self.frame.sum() / 3.3]
-        return [output, forward.Region]
+        return [output, raster]
 
 
 class RetroClient:
-    def __init__(self, port, game, actions=[], bk2_location=None):
+    def __init__(self, game, actions=[], bk2_location=None):
         import multiprocessing as mp
 
         self.parent_connection, child_connection = mp.Pipe()
@@ -232,172 +230,3 @@ class RetroClient:
     def actions_commitment_intervals(self):
         self.parent_connection.send(['actions_commitment_intervals', {}])
         return self.parent_connection.recv()
-
-
-class RetroClient0:
-    def __init__(self, port, game, actions=[], bk2_location=None):
-        self.url = f'http://localhost:{port}'
-
-        import subprocess
-        subprocess.Popen(["python3", __file__, str(port)])
-
-        while True:
-            try:
-                content = requests.get(self.url).content
-                break
-            except requests.exceptions.ConnectionError:
-                import time
-                time.sleep(0.05)
-
-        self.initialize(game, actions, bk2_location)
-
-    def initialize(self, game, actions, bk2_location):
-        return post_request_json(self.url, {
-            "Request": "Initialize",
-            "Game": game,
-            "Actions": actions,
-            "bk2_location": bk2_location
-        })
-
-    def step(self, action, commitment_interval):
-        response = requests.post(self.url, json={
-            "Request": "MethodExecute",
-            "Method": "step",
-            "Arguments": [action, commitment_interval]
-        })
-
-        return response.json()
-
-    def interface_render(self):
-        response = requests.post(self.url, json={
-            "Request": "MethodExecute",
-            "Method": "interface_render",
-            "Arguments": []
-        })
-
-        return response.json()
-
-    def close(self):
-        response = requests.post(self.url, json={
-            "Request": "MethodExecute",
-            "Method": "close",
-            "Arguments": []
-        })
-
-        return response.json()
-
-    def image_files_folder(self):
-        return requests.post(self.url, json={
-            "Request": "PropertyGet",
-            "Property": "image_files_folder"
-        }).json()
-
-    def actions_commitment_intervals(self):
-        return requests.post(self.url, json={
-            "Request": "MethodExecute",
-            "Method": "actions_commitment_intervals",
-            "Arguments": []
-        }).json()
-
-    """
-    def execute(self, body):
-        return post_request_json(f'http://localhost:{self.port}', {
-            "EvaluationType": "exec",
-            "Body": body
-        })
-
-    def evaluate(self, body):
-        return post_request_json(f'http://localhost:{self.port}', {
-            "EvaluationType": "eval",
-            "Body": body
-        })
-    """
-
-class Client:
-    def __init__(self, port):
-        self.port = str(port)
-
-        import subprocess
-        subprocess.Popen(["python3", __file__, self.port])
-
-    """
-    def execute(self, body):
-        return post_request_json(f'http://localhost:{self.port}', {
-            "EvaluationType": "exec",
-            "Body": body
-        })
-
-    def evaluate(self, body):
-        return post_request_json(f'http://localhost:{self.port}', {
-            "EvaluationType": "eval",
-            "Body": body
-        })
-    """
-
-
-environment1 = None
-class Server(http.server.BaseHTTPRequestHandler):
-    def do_POST(self):
-        global environment1
-
-        self.send_response(200)
-        self.send_header('Content-type', 'text/json')
-        self.end_headers()
-
-        length = int(self.headers['Content-Length'])
-        data = self.rfile.read(length)
-        request = json.loads(data)
-
-        print("Request")
-        print(json.dumps(request).encode()[:800])
-
-        """
-        type = request['EvaluationType']
-        body = request['Body']
-
-        print("RECEIVED", body)
-
-        if request['EvaluationType'] == 'eval':
-            evaluate = eval
-        elif request['EvaluationType'] == 'exec':
-            evaluate = exec
-
-        response = {
-            "Response": evaluate(body, globals())
-        }
-        """
-
-        respond = lambda response: self.wfile.write(json.dumps(response).encode())
-
-        if request["Request"] == 'Initialize':
-            bk2_location = request["bk2_location"]
-            environment1 = Environment3(game=request['Game'], actions=request["Actions"], bk2_location=bk2_location)
-
-            respond("AllGood")
-
-        elif request["Request"] == 'MethodExecute':
-            method = request["Method"]
-            arguments = request["Arguments"]
-            print("MethodExecute-", method, arguments, flush=True)
-
-            responseo = environment1.__getattribute__(method)(*arguments)
-            if isinstance(responseo, np.ndarray):
-                respond(responseo.tolist())
-            else:
-                respond(environment1.__getattribute__(method)(*arguments))
-
-        elif request["Request"] == 'PropertyGet':
-            property = request["Property"]
-
-            respond(environment1.__getattribute__(property))
-
-
-def run(port):
-    print("Listening on port-Retro", str(port) + ".")
-
-    httpd = http.server.HTTPServer(('', port), Server)
-    httpd.serve_forever()
-
-if __name__ == "__main__":
-    print("got args", sys.argv[1:])
-    run(port=int(sys.argv[1]))

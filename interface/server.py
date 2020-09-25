@@ -2,12 +2,11 @@
 import http.server
 
 import json
-import time
 import torch
 import numpy as np
 import retro
 
-import random
+import uuid
 import os
 import matplotlib.pyplot as plt
 
@@ -19,7 +18,6 @@ class Server(http.server.BaseHTTPRequestHandler):
     #     html_index_file = file.read()
 
     environments = {}
-    blocks_seen = {}
 
     games_list = sorted([
         "SuperMarioBros-Nes",
@@ -46,19 +44,6 @@ class Server(http.server.BaseHTTPRequestHandler):
     ## print()
     ## print(f'Game check time {time.time() - t0:0.2f}s')
 
-    actions = {
-        'Up':        [0, 0, 0, 0, 1, 0, 0, 0, 0],
-        'Down':      [0, 0, 0, 0, 0, 1, 0, 0, 0],
-        'Left':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
-        'Right':     [0, 0, 0, 0, 0, 0, 0, 1, 0],
-        'None':      [0, 0, 0, 0, 0, 0, 0, 0, 0],
-        'B':         [1, 0, 0, 0, 0, 0, 0, 0, 0],
-        'A':         [0, 0, 0, 0, 0, 0, 0, 0, 1],
-        'RightDash': [1, 0, 0, 0, 0, 0, 0, 1, 0],
-        'LeftJump':  [0, 0, 0, 0, 0, 0, 1, 0, 1],
-        'RightJump': [0, 0, 0, 0, 0, 0, 0, 1, 1]
-    }
-
     def request_process(self, request):
         request_name = request["Request"]
         client_id = request["ClientId"]
@@ -69,8 +54,6 @@ class Server(http.server.BaseHTTPRequestHandler):
             }
 
         elif request_name == "ImageUrl":
-            import uuid
-
             image_files_folder = Server.environments[client_id].image_files_folder()
             file_name = f"{image_files_folder}/{uuid.uuid4()}.png"
             frame, _encodings, _blocks, _frame_index = Server.environments[client_id].interface_render()
@@ -82,7 +65,8 @@ class Server(http.server.BaseHTTPRequestHandler):
             client_id = request['ClientId']
             game = request['Game']
 
-            random_key = random.random()
+            random_key = uuid.uuid4()
+
             # todo convenient file name
 
             if request['ResourceType'] == '.bk2 Replay Data':
@@ -92,8 +76,7 @@ class Server(http.server.BaseHTTPRequestHandler):
                 folder = f'/tmp/{random_key}'
                 os.makedirs(folder)
 
-                random_port = random.randint(1024, 65536)
-                environment = retro_server.RetroClient(game=game, port=random_port,
+                environment = retro_server.RetroClient(game=game,
                                                        bk2_location=folder,
                                                        actions=actions)
 
@@ -118,8 +101,7 @@ class Server(http.server.BaseHTTPRequestHandler):
                 folder = f'/tmp/{random_key}'
                 os.makedirs(folder)
 
-                random_port = random.randint(1024, 65536)
-                environment = retro_server.RetroClient(game=game, port=random_port,
+                environment = retro_server.RetroClient(game=game,
                                                        bk2_location=folder,
                                                        actions=actions)
 
@@ -145,43 +127,12 @@ class Server(http.server.BaseHTTPRequestHandler):
             if environment := Server.environments.get(client_id):
                 environment.close()
 
-            random_port = random.randint(1024, 65536)
-            Server.environments[client_id] = retro_server.RetroClient(game=game, port=random_port)
-            print("RETROCLIENT")
-
+            Server.environments[client_id] = retro_server.RetroClient(game=game)
             frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
 
-            import matplotlib
-            import numbers
-            import uuid
-
-            data_payload = []
-            for data in Server.environments[client_id].interface_render2():
-                if isinstance(data, matplotlib.figure.Figure):
-                    file_id = uuid.uuid4()
-                    file_name = f"/tmp/{file_id}.png"
-                    data.savefig(file_name)
-                    data_payload.append(["Image", f"{file_id}.png"])
-
-                elif isinstance(data, np.ndarray):
-                    data_payload.append(["Array2D", data.tolist()])
-
-                elif isinstance(data, torch.Tensor):
-                    data_payload.append(["Array2D", data.tolist()])
-                    print("SHAPE", data.shape)
-
-                elif isinstance(data, numbers.Integral):
-                    data_payload.append(["Number", int(data)])
-
-                elif isinstance(data, numbers.Number):
-                    data_payload.append(["Number", float(data)])
-
-                elif isinstance(data, list):
-                    if isinstance(data[0], list):
-                        data_payload.append(["Array2D", data])
-
-                else:
-                    print(">>>>>>>>>>>>", type(data))
+            import forward
+            data = Server.environments[client_id].interface_render2()
+            data_payload = forward.payload_format(data)
 
             return {
                 'Observation': frame,
@@ -192,24 +143,8 @@ class Server(http.server.BaseHTTPRequestHandler):
             }
 
         elif request_name == "Action":
+            action = request["Action"]
             commitment_interval = request["CommitmentInterval"]
-
-            if isinstance(request["Action"], list):
-                action = request["Action"]
-            else:
-                action = Server.actions[request["Action"]]
-
-            environment = Server.environments[client_id]
-
-            # action = environment.action_space.sample()
-            unknown = [0, 0, 0, 0, 0, 1, 0, 0, 0]
-            unknown = [0, 0, 0, 0, 1, 0, 0, 0, 0]
-            unknown = [0, 0, 0, 1, 0, 0, 0, 0, 0]
-            unknown = [0, 0, 1, 0, 0, 0, 0, 0, 0]
-            unknown = [0, 1, 0, 0, 0, 0, 0, 0, 0]
-            unknown = [1, 0, 0, 0, 0, 0, 0, 0, 0]
-
-            print("ACTION", action)
 
             import time
             t0 = time.time()
@@ -217,37 +152,9 @@ class Server(http.server.BaseHTTPRequestHandler):
             frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
             print("TIME", time.time() - t0)
 
-            import matplotlib
-            import numbers
-            import uuid
-
-            data_payload = []
-            for data in Server.environments[client_id].interface_render2():
-                if isinstance(data, matplotlib.figure.Figure):
-                    file_id = uuid.uuid4()
-                    file_name = f"/tmp/{file_id}.png"
-                    data.savefig(file_name)
-                    data_payload.append(["Image", f"{file_id}.png"])
-
-                elif isinstance(data, np.ndarray):
-                    data_payload.append(["Array2D", data.tolist()])
-
-                ## elif isinstance(data, torch.Tensor):
-                ##     data_payload.append(["Array2D", data.tolist()])
-                ##     print("SHAPE", data.shape)
-
-                elif isinstance(data, numbers.Integral):
-                    data_payload.append(["Number", int(data)])
-
-                elif isinstance(data, numbers.Number):
-                    data_payload.append(["Number", float(data)])
-
-                elif isinstance(data, list):
-                    if isinstance(data[0], list):
-                        data_payload.append(["Array2D", data])
-
-                else:
-                    print(">>>>>>>>>>>>", type(data))
+            import forward
+            data = Server.environments[client_id].interface_render2()
+            data_payload = forward.payload_format(data)
 
             return {
                 'Observation': frame,
@@ -272,15 +179,14 @@ class Server(http.server.BaseHTTPRequestHandler):
         print("Request")
         print(json.dumps(request).encode()[:800])
 
-        t0 = time.time()
         response = self.request_process(request)
-        print(f'QueryTime: {time.time() - t0}')
 
         self.wfile.write(json.dumps(response).encode())
 
 
     def do_GET(self):
         print(">>", self.path)
+
         if self.path == '/':
             self.send_response(200)
             self.send_header('Content-type', 'text/html')

@@ -97,6 +97,16 @@
             /*border: 0.5px solid #eee;*/
             text-align: center;
         }
+        
+        #clipboard-input {
+            visibility: hidden;
+            width: 0px;
+            height: 0px;
+        }
+
+        .clipboard-button {
+            cursor: pointer;
+        }
 
         .reset-button {
             /*background: none;*/
@@ -144,20 +154,20 @@
     <div class="container">
         <div class="container-horizontal controls">
             <span style="display: flex; flex-direction: column; align-items: center;">
-                <button onclick="action('Up')" style="margin-bottom: 1px">UP</button>
+                <button onclick="action(actionsMap['UP'])" style="margin-bottom: 1px">UP</button>
                 <span style="display: flex; flex-direction: row">
-                    <button onclick="action('Left')">LEFT</button>
-                    <button onclick="action('Right')" style="margin-left: 1px">RIGHT</button>
+                    <button onclick="action(actionsMap['LEFT'])">LEFT</button>
+                    <button onclick="action(actionsMap['RIGHT'])" style="margin-left: 1px">RIGHT</button>
                 </span>
-                <button onclick="action('Down')" style="margin-top: 1px">DOWN</button>
+                <button onclick="action(actionsMap['DOWN'])" style="margin-top: 1px">DOWN</button>
             </span> &nbsp;
-            <button onclick="action('B')">B</button> &nbsp;
-            <button onclick="action('A')">A</button>
+            <button onclick="action(actionsMap['B'])">B</button> &nbsp;
+            <button onclick="action(actionsMap['A'])">A</button>
         </div>
         <div class="spacing"></div>
         <div class="container-horizontal controls">
             <button onclick="reset()" class="reset-button">RESET</button> &nbsp;
-            <button onclick="action('None')">NONE</button> &nbsp;
+            <button onclick="action(actionsMap['NONE'])">NONE</button> &nbsp;
             <!--button onclick="run(event.target)">RUN</button> &nbsp; -->
         </div>
         <script>
@@ -192,6 +202,8 @@
     <div class="container-horizontal">
         <div id="blocks"><div></div></div>
     </div>
+
+    <textarea type="text" id="clipboard-input"></textarea>
 
     <div style="height: 70px"></div>
     <center><a href="https://github.com/freshwater/FORWARD"><img class="github-icon" src="GitHub-Mark-64px.png" width="24" height="24" /></a></center>
@@ -284,11 +296,11 @@
         let activeAction = actionsMap['NONE'];
 
         function actionsAdd(action1, action2) {
-            return action1 .map ((_, i) => action1[i] + action2[i])
+            return action1 .map ((_, i) => Math.min(1, action1[i] + action2[i]))
         }
 
         function actionsSubtract(action1, action2) {
-            return action1 .map ((_, i) => action1[i] - action2[i])
+            return action1 .map ((_, i) => Math.max(0, action1[i] - action2[i]))
         }
 
         let lockedButtonsCount = 0;
@@ -400,6 +412,13 @@
                             } else if (type === "Number") {
                                 return <span className="number">{value}</span>;
                             } else if (type === "Array2D") {
+                                let rowText = (row) => `[${row}]`;
+
+                                let clipboardText = `np.array([\n${value .map (rowText) .join(",\n")}])`;
+                                value = value.concat([Array(value[0].length).fill(" ")]);
+
+                                value[value.length - 1][value[0].length - 1] = <span className="clipboard-button" title="Copy to Clipboard" onClick={(event) => clipboardCopy(clipboardText, event)}>📋</span>;
+
                                 return <table className="array">
                                     <tbody>
                                     {value .map ( row => <tr>{row .map (elem => <td>{elem}</td> )}</tr>)}
@@ -412,6 +431,19 @@
                     return <div></div>;
                 }
             }
+        }
+
+        function clipboardCopy(text, event) {
+            let element = document.getElementById('clipboard-input');
+            element.style.visibility = 'visible';
+            element.value = text;
+            element.select();
+            element.setSelectionRange(0, 99999);
+            document.execCommand("copy");
+            element.blur();
+            element.style.visibility = 'hidden';
+
+            event.target.classList.add('clipboard-clicked');
         }
 
         function setDisplay(data) {
