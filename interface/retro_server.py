@@ -10,7 +10,6 @@ import retro
 import os
 
 import matplotlib.pyplot as plt
-import requests
 
 def post_request_json(url, data):
     import urllib
@@ -52,6 +51,13 @@ class Environment3:
 
         self.actions_all = []
         self.commitment_intervals_all = []
+
+        asymmetric = torch.linspace(0.5, 1.5, 16*16*3)**3
+        asymmetric = asymmetric.numpy()
+        
+        aa = torch.tensor(asymmetric).reshape(16, 16, 3).unsqueeze(0).permute(0, 3, 1, 2)
+        filter_ = torch.tensor(aa, dtype=torch.float)
+        self.filter_ = filter_ / 16 / 16 / 3 / 255
 
         if actions:
             # note this produces different encodings, since the default
@@ -136,6 +142,39 @@ class Environment3:
         return self.frame.tolist(), list(self.encodings_frame), self.blocks_seen_urls, self.frame_index
 
 
+    def interface_render2(self):
+        import torch
+        import torch.nn.functional as F
+
+        import forward
+
+        # self.blocks_seen_urls = sorted(self.blocks_seen_urls)
+        # return self.frame.tolist(), list(self.encodings_frame), self.blocks_seen_urls, self.frame_index
+
+        # ax1.hist(self.frame.ravel())
+        # plt.plot(sorted(self.frame.ravel()))
+        # plt.imshow(self.frame[:,:,0])
+
+        # tensor = torch.tensor(np.stack(self.frames_all)).float()
+        tensor = torch.tensor(self.frame, dtype=torch.float).unsqueeze(0)
+        images = tensor.permute(0, 3, 1, 2)
+        
+        # id_ = str(uuid.uuid4())
+        # np.savez_compressed(f'/tmp/{id}.npz', np.stack(self.frames_all).astype('uint8'))
+
+        output = F.conv2d(input=images,
+                          weight=self.filter_,
+                          stride=16)
+
+        output = output[:, :, 4:-1].squeeze()
+
+        output = [[str(e)[:4] for e in row]
+                  for row in output.tolist()]
+
+        # return [self.frame[::6,::6,0], self.frame.sum() / 3.3]
+        return [output, forward.Region]
+
+
 class RetroClient:
     def __init__(self, port, game, actions=[], bk2_location=None):
         import multiprocessing as mp
@@ -176,6 +215,10 @@ class RetroClient:
 
     def interface_render(self):
         self.parent_connection.send(['interface_render', {}])
+        return self.parent_connection.recv()
+
+    def interface_render2(self):
+        self.parent_connection.send(['interface_render2', {}])
         return self.parent_connection.recv()
 
     def close(self):

@@ -151,11 +151,44 @@ class Server(http.server.BaseHTTPRequestHandler):
 
             frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
 
+            import matplotlib
+            import numbers
+            import uuid
+
+            data_payload = []
+            for data in Server.environments[client_id].interface_render2():
+                if isinstance(data, matplotlib.figure.Figure):
+                    file_id = uuid.uuid4()
+                    file_name = f"/tmp/{file_id}.png"
+                    data.savefig(file_name)
+                    data_payload.append(["Image", f"{file_id}.png"])
+
+                elif isinstance(data, np.ndarray):
+                    data_payload.append(["Array2D", data.tolist()])
+
+                elif isinstance(data, torch.Tensor):
+                    data_payload.append(["Array2D", data.tolist()])
+                    print("SHAPE", data.shape)
+
+                elif isinstance(data, numbers.Integral):
+                    data_payload.append(["Number", int(data)])
+
+                elif isinstance(data, numbers.Number):
+                    data_payload.append(["Number", float(data)])
+
+                elif isinstance(data, list):
+                    if isinstance(data[0], list):
+                        data_payload.append(["Array2D", data])
+
+                else:
+                    print(">>>>>>>>>>>>", type(data))
+
             return {
                 'Observation': frame,
                 'BlockEncodings': encodings,
                 'Blocks': blocks,
-                'FrameIndex': frame_index
+                'FrameIndex': frame_index,
+                'Data': data_payload
             }
 
         elif request_name == "Action":
@@ -184,11 +217,44 @@ class Server(http.server.BaseHTTPRequestHandler):
             frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
             print("TIME", time.time() - t0)
 
+            import matplotlib
+            import numbers
+            import uuid
+
+            data_payload = []
+            for data in Server.environments[client_id].interface_render2():
+                if isinstance(data, matplotlib.figure.Figure):
+                    file_id = uuid.uuid4()
+                    file_name = f"/tmp/{file_id}.png"
+                    data.savefig(file_name)
+                    data_payload.append(["Image", f"{file_id}.png"])
+
+                elif isinstance(data, np.ndarray):
+                    data_payload.append(["Array2D", data.tolist()])
+
+                ## elif isinstance(data, torch.Tensor):
+                ##     data_payload.append(["Array2D", data.tolist()])
+                ##     print("SHAPE", data.shape)
+
+                elif isinstance(data, numbers.Integral):
+                    data_payload.append(["Number", int(data)])
+
+                elif isinstance(data, numbers.Number):
+                    data_payload.append(["Number", float(data)])
+
+                elif isinstance(data, list):
+                    if isinstance(data[0], list):
+                        data_payload.append(["Array2D", data])
+
+                else:
+                    print(">>>>>>>>>>>>", type(data))
+
             return {
                 'Observation': frame,
                 'BlockEncodings': encodings,
                 'Blocks': blocks,
-                'FrameIndex': frame_index
+                'FrameIndex': frame_index,
+                'Data': data_payload
             }
 
         raise NotImplementedError(request)
@@ -214,6 +280,7 @@ class Server(http.server.BaseHTTPRequestHandler):
 
 
     def do_GET(self):
+        print(">>", self.path)
         if self.path == '/':
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
@@ -225,6 +292,17 @@ class Server(http.server.BaseHTTPRequestHandler):
             response = Server.html_index_file
 
             self.wfile.write(response.encode())
+
+        elif self.path[-len('.js'):] == '.js':
+            with open('static/components.js') as file:
+                Server.components_file = file.read()
+
+            self.send_header('Content-type', 'application/javascript')
+            self.end_headers()
+            self.wfile.write(Server.components_file.encode())
+
+        elif self.path == '/favicon.ico':
+            self.wfile.write("WE DONT HAVE IT".encode())
 
         else:
             file_type = [extension for extension in ['.bk2', '.json', '.mp4', '.png', '.mkv', '.webm']
