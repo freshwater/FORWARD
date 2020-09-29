@@ -158,19 +158,20 @@ class Environment3:
                           stride=16)
 
         output = output[:, :, 4:-1].squeeze()
+        output_array = output
 
         output = [[str(e)[:4] for e in row]
                   for row in output.tolist()]
 
-        raster = fwd.Raster(data=np.random.rand(20, 20),
-                            elements=[
-                                fwd.Region(geometry=[[0, 0], [5, 5]],
-                                           color=[1, 0, 0, 0.5],
-                                           label="HEY!")
-                            ])
+        image = fwd.Image(self.frame, elements=[
+            fwd.Region(geometry=[[0, 0], [16, 16]],
+                       color=[1, 1, 1, 0.5],
+                       label="HEY!")
+        ])
 
-        # return [self.frame[::6,::6,0], self.frame.sum() / 3.3]
-        return [output, raster]
+        return [image, output, fwd.Image(output_array),
+                {'Frame Index': self.frame_index,
+                 'Reduction': fwd.Image(1 - output_array)}]
 
 
 class RetroClient:

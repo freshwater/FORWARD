@@ -406,9 +406,20 @@
             render() {
                 if (this.props.data.length > 0) {
                     return <div className="data-display">
-                        {this.props.data .map ( ([type, value]) => {
+                        {this.props.data .map ( ({Type: type, Value: value, Shape: shape, Elements: elements, ...obj}) => {
+
                             if (type === "Image") {
-                                return <img src={this.props.data[0][1]} style={{imageRendering: 'pixelated'}} width={256} height={240} />;
+                                return <div style={{position: 'relative', display: 'inline-block'}}>
+                                    <img src={value} style={{imageRendering: 'pixelated'}} height={shape[0]} width={shape[1]} />
+
+                                    { elements .map ( ({Type: type, Geometry: [[x1, y1], [x2, y2]], Color: [r, g, b, a]}) => {
+                                        return <span style={{position: 'absolute',
+                                                             left: x1, top: y1,
+                                                             width: x2 - x1,
+                                                             height: y2 - y1,
+                                                             background: `rgba(${r*255}, ${g*255}, ${b*255}, ${a})`}}></span>
+                                    } ) }
+                                </div>;
                             } else if (type === "Number") {
                                 return <span className="number">{value}</span>;
                             } else if (type === "Array2D") {

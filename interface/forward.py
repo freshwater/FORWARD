@@ -1,9 +1,12 @@
 
+import torch
+import matplotlib.pyplot as plt
+import matplotlib
+
+import uuid
 
 
 def payload_format(data):
-    import matplotlib
-    import torch
     import numbers
 
     data_payload = []
@@ -11,25 +14,30 @@ def payload_format(data):
         if isinstance(element, matplotlib.figure.Figure):
             file_id = uuid.uuid4()
             file_name = f"/tmp/{file_id}.png"
+
             element.savefig(file_name)
-            data_payload.append(["Image", f"{file_id}.png"])
+            data_payload.append({"Type": "Image",
+                                 "Value": f"{file_id}.png"})
 
-        elif isinstance(element, np.ndarray):
-            data_payload.append(["Array2D", element.tolist()])
+        elif isinstance(element, Image):
+            data_payload.append(element.json())
 
-        elif isinstance(element, torch.Tensor):
-            data_payload.append(["Array2D", element.tolist()])
-            print("SHAPE", element.shape)
+        elif isinstance(element, (np.ndarray, torch.Tensor)):
+            data_payload.append({"Type": "Array2D",
+                                 "Value": element.tolist()})
 
         elif isinstance(element, numbers.Integral):
-            data_payload.append(["Number", int(element)])
+            data_payload.append({"Type": "Number",
+                                 "Value": int(element)})
 
         elif isinstance(element, numbers.Number):
-            data_payload.append(["Number", float(element)])
+            data_payload.append({"Type": "Number",
+                                 "Value": float(element)})
 
         elif isinstance(element, list):
             if isinstance(element[0], list):
-                data_payload.append(["Array2D", element])
+                data_payload.append({"Type": "Array2D",
+                                     "Value": element})
 
         else:
             print(">>>>>>>>>>>>", type(element))
@@ -47,10 +55,40 @@ class Array:
             for column in row:
                 pass
 
+class Image:
+    def __init__(self, array, elements=[]):
+        if isinstance(array, torch.Tensor):
+            self.array = array.detach().cpu().numpy()
+        else:
+            self.array = array
+
+        self.elements = elements
+
+    def json(self):
+        file_id = uuid.uuid4()
+        file_name = f"/tmp/{file_id}.png"
+
+        plt.imsave(file_name, self.array)
+
+        return {"Type": "Image",
+                "Value": f"{file_id}.png",
+                "Shape": self.array.shape,
+                "Elements": [element.json() for element in self.elements]}
 
 class Region:
     def __init__(self, geometry, color=[0.5, 0.5, 0.5, 1.0], label="", label_color=[1, 1, 1, 1]):
-        pass
+        self.geometry = geometry
+        self.label = label
+        self.color = color
+        self.label_color = label_color
+
+    def json(self):
+        return {
+            'Geometry': self.geometry,
+            'Label': self.label,
+            'Color': self.color,
+            'LabelColor': self.label_color
+        }
 
 class Raster:
     def __init__(self, data, elements=[]):
