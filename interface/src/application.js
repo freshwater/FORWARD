@@ -14,38 +14,6 @@ class GameSelection extends React.Component {
     }
 }
 
-class ModesSelect extends React.Component {
-    constructor(props) {
-        super(props);
-        this.state = {mode: props.initialMode};
-    }
-
-    modeUpdate(event) {
-        let newMode = event.target.innerText || event.target.value;
-        this.props.modeUpdate(newMode);
-        this.setState({mode: newMode});
-    }
-
-    cycle(event) {
-        let arr = this.props.modes.concat(this.props.modes);
-        let newMode = arr[arr.indexOf(this.state.mode) + 1];
-        this.props.modeUpdate(newMode);
-        this.setState({mode: newMode});
-    }
-
-    render() {
-        let name = new String(Math.random());
-        return [<span style={{'cursor': 'e-resize', 'userSelect': 'none'}}
-                        onClick={(event) => this.cycle(event)}>{this.props.label}:</span>].concat(this.props.modes .map (
-            (value) => <span onClick={(event) => this.modeUpdate(event)} style={{'cursor': 'default', 'userSelect': 'none'}}>
-                <input type="radio" name={name} value={value} checked={value === this.state.mode}
-                        onChange={(event) => this.modeUpdate(event)}></input>
-                {value}
-            </span>
-        ));
-    }
-}
-
 class DownloadsSelection extends React.Component {
     render() {
         return <select id={this.props.id} defaultValue={this.props.initialValue}
@@ -162,28 +130,6 @@ function runContinuous() {
     doAction();
 }
 
-let codesDisplayMode = "show";
-let codesModeUpdate = (newMode) => {
-    codesDisplayMode = newMode;
-    colorEncodingsTransparent = {}; 
-    setTimeout(frameRender, 10);
-};
-ReactDOM.render(<ModesSelect modes={["none", "show"]} label="Codes"
-                                initialMode={codesDisplayMode} modeUpdate={codesModeUpdate} />,
-                document.getElementById('codes-display-modes-selection'));
-
-
-let blocksDisplayMode = "translucent";
-let blocksModeUpdate = (newMode) => {
-    blocksDisplayMode = newMode;
-    colorEncodingsTransparent = {};
-    setTimeout(frameRender, 10);
-}
-ReactDOM.render(<ModesSelect modes={["none", "translucent", "solid"]} label="Blocks"
-                                initialMode={blocksDisplayMode} modeUpdate={blocksModeUpdate} />,
-                document.getElementById('blocks-display-modes-selection'));
-
-
 let downloadId = new String(Math.random()).substring(2);
 ReactDOM.render([<DownloadsSelection id={downloadId} values={[".mp4 Replay Video", ".bk2 Replay Data", ".json Action Sequence"]}
                                         initialValue=".mp4 Replay Video" />,
@@ -192,25 +138,45 @@ ReactDOM.render([<DownloadsSelection id={downloadId} values={[".mp4 Replay Video
                 document.querySelector('.downloads-selection'));
 
 class DataDisplay extends React.Component {
+    shouldComponentUpdate() {
+        return true;
+    }
+
     render() {
         if (this.props.data.length > 0) {
             return <div className="data-display">
-                {this.props.data .map ( ({Type: type, Value: value, Shape: shape, Elements: elements, ...obj}) => {
+                {this.props.data .map ( ({Type: type, Value: value, Shape: shape, Elements: elements, ...obj}, mainIndex) => {
 
                     if (type === "Image") {
-                        return <div style={{position: 'relative', display: 'inline-block'}}>
-                            <img src={value} style={{imageRendering: 'pixelated'}} height={shape[0]} width={shape[1]} />
+                        let scale = 2;
+                        return <div key={mainIndex} style={{position: 'relative', display: 'inline-block'}}>
+                            <img src={value} style={{imageRendering: 'pixelated'}} height={scale*shape[0]} width={scale*shape[1]}></img>
 
-                            { elements .map ( ({Type: type, Geometry: [[x1, y1], [x2, y2]], Color: [r, g, b, a]}) => {
-                                return <span style={{position: 'absolute',
-                                                        left: x1, top: y1,
-                                                        width: x2 - x1,
-                                                        height: y2 - y1,
-                                                        background: `rgba(${r*255}, ${g*255}, ${b*255}, ${a})`}}></span>
+                            { elements .map ( ({Type: type,
+                                                Geometry: [[x1, y1], [x2, y2]], Color: [r, g, b, a],
+                                                Label: label, LabelColor: [r2, g2, b2, a2]}, index) => {
+
+                                [x1, y1, x2, y2] = [scale*x1, scale*y1, scale*x2, scale*y2];
+
+                                return <span key={`region-${index}`} style={{
+                                                    position: 'absolute',
+                                                    left: x1, top: y1,
+                                                    width: x2 - x1,
+                                                    height: y2 - y1,
+                                                    fontSize: '0.5em',
+                                                    overflow: 'hidden',
+
+                                                    display: 'flex',
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
+
+                                                    background: `rgba(${r*255}, ${g*255}, ${b*255}, ${a})`,
+                                                    color: `rgba(${r2*255}, ${g2*255}, ${b2*255}, ${a2})`}}>{label}</span>;
                             } ) }
                         </div>;
                     } else if (type === "Number") {
-                        return <span className="number">{value}</span>;
+                        return <span key={mainIndex} className="number">{value}</span>;
+
                     } else if (type === "Array2D") {
                         let rowText = (row) => `[${row}]`;
 
@@ -219,9 +185,9 @@ class DataDisplay extends React.Component {
 
                         value[value.length - 1][value[0].length - 1] = <span className="clipboard-button" title="Copy to Clipboard" onClick={(event) => clipboardCopy(clipboardText, event)}>📋</span>;
 
-                        return <table className="array">
+                        return <table key={mainIndex} className="array">
                             <tbody>
-                            {value .map ( row => <tr>{row .map (elem => <td>{elem}</td> )}</tr>)}
+                            {value .map ( (row, i) => <tr key={i}>{row .map ((elem, j) => <td key={j}>{elem}</td> )}</tr>)}
                             </tbody>
                         </table>;
                     }
@@ -247,7 +213,8 @@ function clipboardCopy(text, event) {
 }
 
 function setDisplay(data) {
-    ReactDOM.render(<DataDisplay data={data}/>, document.getElementById('data-display-container'));
+    let dataDisplay = ReactDOM.render(<DataDisplay data={data}/>, document.getElementById('data-display-container'));
+    // dataDisplay.forceUpdate();
 }
 
 var currentFrameIndex = 0;
@@ -338,25 +305,19 @@ function action(action_, onResponse=function(){}) {
 
         onResponse();
 
-        frameRender(obs, encodings, frameIndex);
+        // frameRender(obs, encodings, frameIndex);
         blocksRender(blocks);
 
         /* */
         let {Data: data} = response;
         setDisplay(data);
+        
     });
 }
 
-var canvas = document.getElementById("canvas");
-var context = canvas.getContext("2d");
-context.scale(3, 3);
-
-var colorEncodings = {};
-var colorEncodingsTransparent = {};
-
-var consoleElement = document.getElementById('console');
-
 function blocksRender(blocksUrls) {
+    var consoleElement = document.getElementById('console');
+
     consoleElement.innerText = blocksUrls.length;
 
     var list = <div>
@@ -373,95 +334,6 @@ function frameRender(frame=lastFrame, encodings=lastEncodings, frameIndex=lastFr
     lastFrame = frame;
     lastEncodings = encodings;
     lastFrameIndex = frameIndex;
-
-    var width = frame.length;
-    var height = frame[0].length;
-
-    var scale = 2.7;
-    canvas.style.width = scale*width*8/7 + 'px';
-    canvas.style.height = scale*width + 'px';
-
-    for (var i = 0; i < width; i++) {
-        for (var j = 0; j < height; j++) {
-            context.beginPath();
-            context.rect(j*2, i*2, 2, 2);
-            context.fillStyle = 'rgb(' + frame[i][j].join(',') + ')';
-            context.fill();
-        }
-    }
-
-    var encodings = encodings.map(t => (t*10).toFixed(2)); 
-
-    let blocksAlpha = {'none': 0, 'translucent': 0.3, 'solid': 1}[blocksDisplayMode];
-    let codesAlpha = {'none': 0, 'show': 0.55}[codesDisplayMode];
-
-    context.font = '12px serif';
-    context.fillStyle = 'yellow';
-    context.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-    context.lineWidth = '0.1px';
-
-    function hash(str, seed = 0) {
-        // "Generate a Hash from string in Javascript"
-        //    https://stackoverflow.com/a/52171480 
-        let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
-        for (let i = 0, ch; i < str.length; i++) {
-            ch = str.charCodeAt(i);
-            h1 = Math.imul(h1 ^ ch, 2654435761);
-            h2 = Math.imul(h2 ^ ch, 1597334677);
-        }
-        h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
-        h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
-        return 4294967296 * (2097151 & h2) + (h1>>>0);
-    };
-
-    /*let counts = {};
-    for (var i = 0; i < 1000000; i++) {
-        var code = Math.abs(hash(new String(Math.random()))) % 256;
-        counts[code] = (counts[code] || 0) + 1;
-    }
-    document.getElementById('console1').innerText = JSON.stringify(counts);
-    */
-
-    var seed = "abcdefgh";
-    for (var encoding of encodings) {
-        var r = Math.abs(hash("red" + seed + new String(encoding))) % 256;
-        var g = Math.abs(hash("green" + seed + new String(encoding))) % 256;
-        var b = Math.abs(hash("blue" + seed + new String(encoding))) % 256;
-
-        colorEncodings[encoding] = colorEncodings[encoding] || 'rgb(' + String([r, g, b]) + ')';
-        colorEncodingsTransparent[encoding] = colorEncodingsTransparent[encoding] || 'rgba(' + String([r, g, b, blocksAlpha]) + ')';
-    }
-
-    var topChomp = 4;
-    var bottomChomp = 2;
-
-    var index = 0;
-    var o = 16;
-    for (var i = 0 + topChomp*16; i < width + 15 - bottomChomp*16; i+=16) {
-        for (var j = 0; j < height; j+=16) {
-            context.fillStyle = colorEncodingsTransparent[encodings[index]];
-            context.beginPath();
-            context.rect(j*2, i*2, 16*2, 16*2);
-            context.fill();
-            index += 1;
-        }
-    }
-
-    index = 0;
-    for (var i = 0 + topChomp*16; i < width + 15 - bottomChomp*16; i+=16) {
-        for (var j = 0; j < height; j+=16) {
-            context.fillStyle = `rgba(255, 255, 0, ${codesAlpha})`;
-            context.fillText(encodings[index], j*2 + 5, i*2 + o + 4);
-            // context.strokeText(encodings[index], j*2 + o / 2, i*2 + o);
-            index += 1;
-        }
-    }
-
-    // right-adjust frame index
-    let frameIndexString = `${frameIndex}`;
-    let textMetrics = context.measureText('_______'.substring(0, 7 - frameIndexString.length))
-    context.fillStyle = 'yellow';
-    context.fillText(frameIndexString, 2*width - 13 + textMetrics.width, 12);
 }
 
 reset("SuperMarioBros-Nes");

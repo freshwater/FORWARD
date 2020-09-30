@@ -76,7 +76,7 @@ class Image:
                 "Elements": [element.json() for element in self.elements]}
 
 class Region:
-    def __init__(self, geometry, color=[0.5, 0.5, 0.5, 1.0], label="", label_color=[1, 1, 1, 1]):
+    def __init__(self, geometry, color=[0.5, 0.5, 0.5, 1.0], label="", label_color=[1, 1, 0, 1]):
         self.geometry = geometry
         self.label = label
         self.color = color

@@ -160,14 +160,35 @@ class Environment3:
         output = output[:, :, 4:-1].squeeze()
         output_array = output
 
-        output = [[str(e)[:4] for e in row]
+        output = [[str(e*10)[:4] for e in row]
                   for row in output.tolist()]
 
-        image = fwd.Image(self.frame, elements=[
-            fwd.Region(geometry=[[0, 0], [16, 16]],
-                       color=[1, 1, 1, 0.5],
-                       label="HEY!")
-        ])
+        height, width, depth = self.frame.shape
+
+        import hashlib
+
+        to_number = lambda x: (int(hashlib.sha1(x.encode()).hexdigest(), 16) % 100_000_000) / 100_000_000
+
+        regions = []
+        seed = "6"
+        for i in range(output_array.shape[0]):
+            for j in range(output_array.shape[1]):
+                value = output_array[i][j].item()
+                r, g, b = (to_number(str(value) + seed + color) for color in ["Red", "Green", "Blue"])
+                regions.append(fwd.Region(geometry=[[j*16, (i+4)*16], [j*16 + 16, (i+4)*16 + 16]],
+                                          color=[r, g, b, 0.2],
+                                          label=output[i][j],
+                                          label_color=[1, 1, 0, 0.75]))
+
+
+        frame_index_region = fwd.Region(geometry=[[width - 8, 0], [width, 8]],
+                                        color=[0, 0, 0, 0],
+                                        label=self.frame_index)
+
+        regions.append(frame_index_region)
+
+
+        image = fwd.Image(self.frame, elements=regions)
 
         return [image, output, fwd.Image(output_array),
                 {'Frame Index': self.frame_index,
