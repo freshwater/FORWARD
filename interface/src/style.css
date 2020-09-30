@@ -64,6 +64,8 @@ button {
     display: flex;
     flex-direction: row;
     align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
 }
 
 .data-display .number {
@@ -83,6 +85,20 @@ button {
     padding: 1px;
     /*border: 0.5px solid #eee;*/
     text-align: center;
+}
+
+.data-display .data-display {
+    line-height: 1px;
+    justify-content: left;
+}
+
+.data-display .data-display img {
+    width: 8px;
+    height: 8px;
+    border-right: 0.5px solid white;
+    border-bottom: 0.5px solid white;
+
+    background: #5894f8;
 }
 
 #clipboard-input {

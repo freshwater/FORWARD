@@ -39,6 +39,10 @@ def payload_format(data):
                 data_payload.append({"Type": "Array2D",
                                      "Value": element})
 
+            elif isinstance(element[0], Image):
+                data_payload.append({"Type": "ForwardList",
+                                     "Value": payload_format(element)})
+
         else:
             print(">>>>>>>>>>>>", type(element))
 
@@ -56,15 +60,45 @@ class Array:
                 pass
 
 class Image:
-    def __init__(self, array, elements=[]):
+    def __init__(self, array, elements=[], display_scale=1):
         if isinstance(array, torch.Tensor):
             self.array = array.detach().cpu().numpy()
         else:
             self.array = array
 
         self.elements = elements
+        self.json_cached = None
+        self.display_scale = display_scale
+
+        self.count = 0
 
     def json(self):
+        self.count += 1
+        # print(f"\nJSON {self.count} {self.json_cached}\n", flush=True)
+        if self.json_cached:
+            return self.json_cached
+
+        else:
+            file_name = f"/tmp/{uuid.uuid4()}.png"
+
+            plt.imsave(file_name, self.array)
+
+            with open(file_name, 'rb') as file:
+                data = file.read()
+
+            import base64
+            encoded = base64.b64encode(data).decode()
+            url_encoded = f"data:image/png;base64,{encoded}"
+
+            self.json_cached = {"Type": "Image",
+                                "Value": url_encoded,
+                                "Shape": self.array.shape,
+                                "DisplayScale": self.display_scale,
+                                "Elements": [element.json() for element in self.elements]}
+
+            return self.json_cached
+
+    def json0(self):
         file_id = uuid.uuid4()
         file_name = f"/tmp/{file_id}.png"
 

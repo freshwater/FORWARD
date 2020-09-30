@@ -11,6 +11,8 @@ import os
 
 import matplotlib.pyplot as plt
 
+import forward as fwd
+
 def block_partition(matrix, block_width):
     matrix = matrix.reshape(-1, block_width, matrix.shape[0] // block_width, block_width, 3)
     matrix = matrix.transpose(2, 1).reshape(-1, block_width, block_width, 3)
@@ -23,6 +25,7 @@ class Environment3:
 
         self.blocks_seen = []
         self.blocks_seen_urls = []
+        self.blocks_seen_images = []
 
         self.encodings = set()
         self.encodings_frame = set()
@@ -111,6 +114,12 @@ class Environment3:
                 plt.imsave(f"/tmp/{self.image_files_folder}/{str(encoding)[2:]}.png", block.byte().numpy())
                 self.blocks_seen_urls.append(f"{self.image_files_folder}/{str(encoding)[2:]}.png")
 
+                image = fwd.Image(array=block.byte(), display_scale=0.5)
+                image.json() # ??
+
+                self.blocks_seen_images.append((encoding, image))
+
+
         new_blocks = [block for encoding, block in zip(encodings_frame, blocks)
                             if encoding in diffs]
 
@@ -190,9 +199,13 @@ class Environment3:
 
         image = fwd.Image(self.frame, elements=regions)
 
+        block_images = [image_F for encoding, image_F in sorted(self.blocks_seen_images)]
+
         return [image, output, fwd.Image(output_array),
                 {'Frame Index': self.frame_index,
-                 'Reduction': fwd.Image(1 - output_array)}]
+                 'Reduction': fwd.Image(1 - output_array)},
+                 len(block_images),
+                 block_images]
 
 
 class RetroClient:

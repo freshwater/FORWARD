@@ -118,10 +118,6 @@ function runContinuous() {
         let action1 = actionsAdd(lockedAction, activeAction);
         activeAction = actionsMap['NONE'];
 
-        if (action1[action1.length - 1] === 1) {
-            console.log("EXO", action1);
-        }
-
         if (lockedButtonsCount > 0) {
             action(action1, doAction);
         }
@@ -145,18 +141,20 @@ class DataDisplay extends React.Component {
     render() {
         if (this.props.data.length > 0) {
             return <div className="data-display">
-                {this.props.data .map ( ({Type: type, Value: value, Shape: shape, Elements: elements, ...obj}, mainIndex) => {
+                {this.props.data .map ( ({Type: type, Value: value, Shape: shape, DisplayScale: displayScale, Elements: elements, ...obj}, mainIndex) => {
 
                     if (type === "Image") {
-                        let scale = 2;
                         return <div key={mainIndex} style={{position: 'relative', display: 'inline-block'}}>
-                            <img src={value} style={{imageRendering: 'pixelated'}} height={scale*shape[0]} width={scale*shape[1]}></img>
+                            {this.props.isNested ?
+                                <img key={value} src={value} style={{imageRendering: 'pixelated'}} height={displayScale*shape[0]} width={displayScale*shape[1]}></img>
+                                :
+                                <img src={value} style={{imageRendering: 'pixelated'}} height={displayScale*shape[0]} width={displayScale*shape[1]}></img> }
 
                             { elements .map ( ({Type: type,
                                                 Geometry: [[x1, y1], [x2, y2]], Color: [r, g, b, a],
                                                 Label: label, LabelColor: [r2, g2, b2, a2]}, index) => {
 
-                                [x1, y1, x2, y2] = [scale*x1, scale*y1, scale*x2, scale*y2];
+                                [x1, y1, x2, y2] = [displayScale*x1, displayScale*y1, displayScale*x2, displayScale*y2];
 
                                 return <span key={`region-${index}`} style={{
                                                     position: 'absolute',
@@ -191,6 +189,11 @@ class DataDisplay extends React.Component {
                             </tbody>
                         </table>;
                     }
+                    else if (type === "ForwardList") {
+                        return <DataDisplay data={value} isNested={true} />;
+                    }
+
+
                 } )}
             </div>;
         } else {
@@ -272,8 +275,6 @@ function reset(game=lastSelectedGame) {
 
         currentFrameIndex = frameIndex;
 
-        frameRender(obs, encodings, frameIndex);
-        blocksRender(blocks)
         query({
             "Request": "ImageUrl",
             "ClientId": clientId
@@ -305,35 +306,11 @@ function action(action_, onResponse=function(){}) {
 
         onResponse();
 
-        // frameRender(obs, encodings, frameIndex);
-        blocksRender(blocks);
-
         /* */
         let {Data: data} = response;
         setDisplay(data);
         
     });
-}
-
-function blocksRender(blocksUrls) {
-    var consoleElement = document.getElementById('console');
-
-    consoleElement.innerText = blocksUrls.length;
-
-    var list = <div>
-        {blocksUrls .map (url => <img key={url} src={url} />)}
-    </div>;
-
-    ReactDOM.render(list, document.getElementById('blocks'));
-}
-
-var lastFrame = null;
-var lastEncodings = null;
-var lastFrameIndex = null;
-function frameRender(frame=lastFrame, encodings=lastEncodings, frameIndex=lastFrameIndex) {
-    lastFrame = frame;
-    lastEncodings = encodings;
-    lastFrameIndex = frameIndex;
 }
 
 reset("SuperMarioBros-Nes");
