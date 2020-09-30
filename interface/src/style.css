@@ -1,0 +1,123 @@
+
+.title {
+    text-align: center;
+    width: 100%;
+}
+
+.spacing {
+    height: 10px;
+}
+
+.container {
+    display: flex;
+    align-items: center;
+    justify-items: center;
+    flex-direction: column;
+}
+
+.container-horizontal {
+    display: flex;
+    align-items: center;
+    justify-items: center;
+}
+
+#canvas {
+    border: 1px solid #5894f8;
+    background: #5894f8;
+}
+
+#blocks div {
+    line-height: 0px;
+}
+
+#blocks img {
+    width: 8px;
+    height: 8px;
+    border-right: 0.5px solid white;
+    border-bottom: 0.5px solid white;
+
+    background: #5894f8;
+}
+
+table, table td, table tr {
+    padding: 1px;
+    margin: 0px;
+    border-spacing: 0px;
+}
+
+.commitment-interval-input {
+    width: 37px;
+    text-align: center;
+}
+
+button {
+    user-select: none;
+}
+
+.control-locked {
+    background: #5894f8;
+    color: white;
+    /*border: 2px dashed blue;*/
+}
+
+.data-display {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.data-display .number {
+    padding: 5px;
+}
+
+.data-display table {
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 0.5em;
+    /*font-size: 5px;*/
+    font-family: Consolas, 'Courier New', monospace;
+    margin: 5px;
+}
+
+.data-display .array td {
+    padding: 1px;
+    /*border: 0.5px solid #eee;*/
+    text-align: center;
+}
+
+#clipboard-input {
+    visibility: hidden;
+    width: 0px;
+    height: 0px;
+}
+
+.clipboard-button {
+    cursor: pointer;
+}
+
+.reset-button {
+    /*background: none;*/
+    border: none;
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.reset-button:hover {
+    background: white;
+    border: 1px solid gray;
+    color: red;
+}
+
+.download-in-progress {
+    cursor: wait;
+}
+
+.github-icon:not(:hover) {
+    opacity: 0.5;
+    transition: opacity 0.3s;
+}
+
+.github-icon:hover {
+    opacity: 0.7;
+    transition: opacity 0.3s;
+}

@@ -17,6 +17,7 @@ class Server(http.server.BaseHTTPRequestHandler):
     # with open('static/index.html') as file:
     #     html_index_file = file.read()
 
+    files_cache = {}
     environments = {}
 
     games_list = sorted([
@@ -187,54 +188,63 @@ class Server(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         print(">>", self.path)
 
+        content_types = {
+            '.js': 'application/javascript',
+            '.css': 'text/css',
+            '.png': 'image/png',
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm'
+        }
+
+        import os.path
+
         if self.path == '/':
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
 
-            with open('static/index.html') as file:
-                Server.html_index_file = file.read()
+            if not Server.files_cache.get('static/index.html'):
+                with open('static/index.html', 'rb') as file:
+                    Server.files_cache['static/index.html'] = file.read()
 
-            response = Server.html_index_file
+            self.wfile.write(Server.files_cache['static/index.html'])
 
-            self.wfile.write(response.encode())
-
-        elif self.path[-len('.js'):] == '.js':
-            with open('static/components.js') as file:
-                Server.components_file = file.read()
-
-            self.send_header('Content-type', 'application/javascript')
+        elif (extension := os.path.splitext(self.path)[1]) in ['.js', '.css']:
+            self.send_response(200)
+            self.send_header('Content-type', content_types[extension])
             self.end_headers()
-            self.wfile.write(Server.components_file.encode())
+
+            if not Server.files_cache.get(self.path):
+                with open('/not_tmp' + self.path, 'rb') as file:
+                    Server.files_cache[self.path] = file.read()
+
+            self.wfile.write(Server.files_cache[self.path])
 
         elif self.path == '/favicon.ico':
             self.wfile.write("WE DONT HAVE IT".encode())
 
-        else:
-            file_type = [extension for extension in ['.bk2', '.json', '.mp4', '.png', '.mkv', '.webm']
-                         if extension in self.path][0]
-
-            if not os.path.exists('/tmp' + self.path):
-                self.send_response(404)
-                return
-
+        elif os.path.splitext(self.path)[1] == '.png':
             self.send_response(200)
-
-            if file_type == '.png':
-                self.send_header('Content-type', 'image/png')
-                self.send_header('Cache-Control', 'max-age=30')
-            elif file_type == '.mp4':
-                self.send_header('Content-type', 'video/mp4')
-            elif file_type == '.webm':
-                self.send_header('Content-type', 'video/webm')
-
-            if file_type in ['.bk2', '.json', '.mp4', '.mkv']:
-                self.send_header('Content-Disposition', 'attachment')
-
+            self.send_header('Content-Type', content_types['.png'])
+            self.send_header('Cache-Control', 'max-age=30')
             self.end_headers()
 
             with open('/tmp' + self.path, 'rb') as file:
                 self.wfile.write(file.read())
+
+        elif ((extension := os.path.splitext(self.path)[1])
+                in ['.bk2', '.json', '.mp4', '.mkv', '.webm']):
+
+            if not os.path.exists('/tmp' + self.path):
+                self.send_response(404)
+            else:
+                self.send_response(200)
+                self.send_header('Content-Type', content_types[extension])
+                self.send_header('Content-Disposition', 'attachment')
+                self.end_headers()
+
+                with open('/tmp' + self.path, 'rb') as file:
+                    self.wfile.write(file.read())
 
 
 def run(port=80):
