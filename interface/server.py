@@ -143,11 +143,11 @@ class Server(http.server.BaseHTTPRequestHandler):
                 for action in Server.actions_map.keys()
             ]] + data[1:]
 
-            self.forward_states[client_id] = self.forward_states.get(client_id) or forward.State()
-            data_payload = self.forward_states[client_id].payload_format(data)
+            data_element = forward.Element.to_element(data)
+            self.forward_states[client_id] = data_element
 
             return {
-                'Data': data_payload
+                'Data': data_element.json()
             }
 
         elif request_name == "Reset":
@@ -165,15 +165,15 @@ class Server(http.server.BaseHTTPRequestHandler):
                 for action in Server.actions_map.keys()
             ]] + data[1:]
 
-            self.forward_states[client_id] = self.forward_states.get(client_id) or forward.State()
-            data_payload = self.forward_states[client_id].payload_format(data)
+            data_element = forward.Element.to_element(data)
+            self.forward_states[client_id] = data_element
 
             return {
                 'Observation': frame,
                 'BlockEncodings': encodings,
                 'Blocks': blocks,
                 'FrameIndex': frame_index,
-                'Data': data_payload
+                'Data': data_element.json()
             }
 
         elif request_name == "Action":

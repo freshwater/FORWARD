@@ -200,11 +200,19 @@ class Environment3:
 
         block_images = [image_F for encoding, image_F in sorted(self.blocks_seen_images)]
 
-        return [image, output, fwd.Image(output_array, display_scale=4),
+        return [image,
+                fwd.Image(output_array, display_scale=4),
+
+                {"R": fwd.Image(self.frame[::2,::2,0], color_map='Grayscale'),
+                 "G": fwd.Image(self.frame[::2,::2,1], color_map='Grayscale'),
+                 "B": fwd.Image(self.frame[::2,::2,2], color_map='Grayscale')},
+
+                fwd.Array(output),
+
                 {'Frame Index': self.frame_index,
-                 'Reduction': fwd.Image(1 - output_array)},
-                 len(block_images),
-                 block_images]
+                 'Blocks Count': len(block_images)},
+                {'Blocks': block_images}
+        ]
 
 
 class RetroClient:

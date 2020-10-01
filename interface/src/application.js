@@ -52,90 +52,101 @@ class DataDisplay extends React.Component {
     }
 
     render() {
-        if (this.props.data.length > 0) {
-            return <div className="data-display">
-                {this.props.data .map ( ({Type: type, Value: value, Shape: shape, DisplayScale: displayScale, Elements: elements, ...obj}, mainIndex) => {
-
-                    if (type === "Image") {
-                        return <div key={mainIndex} style={{position: 'relative', display: 'inline-block'}}>
-                            {this.props.isNested ?
-                                <img key={value} src={value} style={{imageRendering: 'pixelated'}} height={displayScale*shape[0]} width={displayScale*shape[1]}></img>
-                                :
-                                <img src={value} style={{imageRendering: 'pixelated'}} height={displayScale*shape[0]} width={displayScale*shape[1]}></img> }
-
-                            { elements .map ( ({Type: type,
-                                                Geometry: [[x1, y1], [x2, y2]], Color: [r, g, b, a],
-                                                Label: label, LabelColor: [r2, g2, b2, a2]}, index) => {
-
-                                [x1, y1, x2, y2] = [displayScale*x1, displayScale*y1, displayScale*x2, displayScale*y2];
-
-                                return <span key={`region-${index}`} style={{
-                                                    position: 'absolute',
-                                                    left: x1, top: y1,
-                                                    width: x2 - x1,
-                                                    height: y2 - y1,
-                                                    fontSize: '0.5em',
-                                                    overflow: 'hidden',
-
-                                                    display: 'flex',
-                                                    justifyContent: 'center',
-                                                    alignItems: 'center',
-
-                                                    background: `rgba(${r*255}, ${g*255}, ${b*255}, ${a})`,
-                                                    color: `rgba(${r2*255}, ${g2*255}, ${b2*255}, ${a2})`}}>{label}</span>;
-                            } ) }
-                        </div>;
-                    } else if (type === "Number") {
-                        return <span key={mainIndex} className="number">{value}</span>;
-
-                    } else if (type === "String") {
-                        return <span key={mainIndex} className="string">{value}</span>;
-
-                    } else if (type === "Array2D") {
-                        let rowText = (row) => `[${row}]`;
-
-                        let clipboardText = `np.array([\n${value .map (rowText) .join(",\n")}])`;
-                        value = value.concat([Array(value[0].length).fill(" ")]);
-
-                        value[value.length - 1][value[0].length - 1] = <span className="clipboard-button" title="Copy to Clipboard" onClick={(event) => clipboardCopy(clipboardText, event)}>📋</span>;
-
-                        return <table key={mainIndex} className="array">
-                            <tbody>
-                            {value .map ( (row, i) => <tr key={i}>{row .map ((elem, j) => <td key={j}>{elem}</td> )}</tr>)}
-                            </tbody>
-                        </table>;
-                    }
-                    else if (type === "ForwardList") {
-                        /*let buttonIds = value .flatMap (({Type: type, Id: id}) => type === 'Button' ? [id] : [])
-
-                        setTimeout(function() {
-                            let buttons = buttonIds .map ((id) => document.getElementById(id));
-                            let maxWidth = Math.max(...[...buttons].map(button => button.clientWidth));
-                            let maxHeight = Math.max(...[...buttons].map(button => button.clientHeight));
-                            [...buttons].forEach(button => button.style.width = `${maxWidth}px`);
-                            [...buttons].forEach(button => button.style.height = `${maxHeight + 5}px`);
-                        }, 10)*/
-
-                        return <DataDisplay data={value} isNested={true} />;
-                    }
-                    else if (type === "Button") {
-                        let onClick = function() {
-                            query({
-                                "Request": "Event",
-                                "ClientId": clientId,
-                                "Type": "Button_OnClick",
-                                "Id": obj['Id']
-                            }, function(response) {
-                                console.log("RESPONSE")
-                                setDisplay(response['Data']);
-                            })
-                        }
-                        return <button id={obj['Id']} key={obj['Id']} onClick={onClick}>{value}</button>
-                    }
-
-
-                } )}
+        let {Type: type, Value: value, ...object} = this.props.data;
+        if (type === "List") {
+            return <div className="list">
+                {value .map ((element, index) => <DataDisplay data={element} index={index} />)}
             </div>;
+        } else if (type === "Image") {
+            let {Shape: shape, DisplayScale: displayScale, Elements: elements} = object;
+
+            return <div key={this.props.index} style={{position: 'relative', display: 'inline-block'}}>
+                {this.props.isNested ?
+                    <img key={value} src={value} style={{imageRendering: 'pixelated'}} height={displayScale*shape[0]} width={displayScale*shape[1]}></img>
+                    :
+                    <img src={value} style={{imageRendering: 'pixelated'}} height={displayScale*shape[0]} width={displayScale*shape[1]}></img> }
+
+                { elements .map ( ({Type: type,
+                                    Geometry: [[x1, y1], [x2, y2]], Color: [r, g, b, a],
+                                    Label: label, LabelColor: [r2, g2, b2, a2]}, index) => {
+
+                    [x1, y1, x2, y2] = [displayScale*x1, displayScale*y1, displayScale*x2, displayScale*y2];
+
+                    return <span key={`region-${index}`} style={{
+                                        position: 'absolute',
+                                        left: x1, top: y1,
+                                        width: x2 - x1,
+                                        height: y2 - y1,
+                                        fontSize: '0.5em',
+                                        overflow: 'hidden',
+
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+
+                                        background: `rgba(${r*255}, ${g*255}, ${b*255}, ${a})`,
+                                        color: `rgba(${r2*255}, ${g2*255}, ${b2*255}, ${a2})`}}>{label}</span>;
+                } ) }
+            </div>;
+
+        } else if (type === "Number") {
+            console.log("loggeroni", value)
+            return <span key={this.props.index} className="number">{value}</span>;
+
+        } else if (type === "String") {
+            return <span key={this.props.index} className="string">{value}</span>;
+
+        } else if (type === "Array2D") {
+            let rowText = (row) => `[${row}]`;
+
+            let clipboardText = `np.array([\n${value .map (rowText) .join(",\n")}])`;
+            value = value.concat([Array(value[0].length).fill(" ")]);
+
+            value[value.length - 1][value[0].length - 1] = <span className="clipboard-button" title="Copy to Clipboard" onClick={(event) => clipboardCopy(clipboardText, event)}>📋</span>;
+
+            return <table key={this.props.index} className="array">
+                <tbody>
+                {value .map ( (row, i) => <tr key={i}>{row .map ((elem, j) => <td key={j}>{elem}</td> )}</tr>)}
+                </tbody>
+            </table>;
+
+        } else if (type === "Button") {
+            let { Id: id } = object;
+
+            let onClick = function () {
+                query({
+                    "Request": "Event",
+                    "ClientId": clientId,
+                    "Type": "Button_OnClick",
+                    "Id": id
+                }, function (response) {
+                    console.log("RESPONSE")
+                    setDisplay(response['Data']);
+                })
+            };
+
+            /*let buttonIds = value .flatMap (({Type: type, Id: id}) => type === 'Button' ? [id] : [])
+
+            setTimeout(function() {
+                let buttons = buttonIds .map ((id) => document.getElementById(id));
+                let maxWidth = Math.max(...[...buttons].map(button => button.clientWidth));
+                let maxHeight = Math.max(...[...buttons].map(button => button.clientHeight));
+                [...buttons].forEach(button => button.style.width = `${maxWidth}px`);
+                [...buttons].forEach(button => button.style.height = `${maxHeight + 5}px`);
+            }, 10)*/
+
+            return <button id={id} key={id} onClick={onClick}>{value}</button>
+
+        } else if (type === "Dictionary") {
+            return <table>
+                <tbody>
+                    {value .map (([key1, value1]) => <tr>
+                        <td><DataDisplay data={key1} /></td>
+                        <td><DataDisplay data={value1} /></td>
+                    </tr>)}
+                </tbody>
+            </table>;
+
         } else {
             return <div></div>;
         }
@@ -156,6 +167,7 @@ function clipboardCopy(text, event) {
 }
 
 function setDisplay(data) {
+    console.log("DATA", data)
     let dataDisplay = ReactDOM.render(<DataDisplay data={data}/>, document.getElementById('data-display-container'));
 }
 
