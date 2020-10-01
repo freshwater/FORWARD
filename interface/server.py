@@ -10,6 +10,7 @@ import uuid
 import os
 import matplotlib.pyplot as plt
 
+import forward
 import retro_server
 
 
@@ -19,6 +20,7 @@ class Server(http.server.BaseHTTPRequestHandler):
 
     files_cache = {}
     environments = {}
+    forward_states = {}
 
     games_list = sorted([
         "SuperMarioBros-Nes",
@@ -44,6 +46,16 @@ class Server(http.server.BaseHTTPRequestHandler):
     ##         pass
     ## print()
     ## print(f'Game check time {time.time() - t0:0.2f}s')
+
+    actions_map = {
+        'UP':        [0, 0, 0, 0, 1, 0, 0, 0, 0],
+        'DOWN':      [0, 0, 0, 0, 0, 1, 0, 0, 0],
+        'LEFT':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
+        'RIGHT':     [0, 0, 0, 0, 0, 0, 0, 1, 0],
+        'NONE':      [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'B':         [1, 0, 0, 0, 0, 0, 0, 0, 0],
+        'A':         [0, 0, 0, 0, 0, 0, 0, 0, 1],
+    };
 
     def request_process(self, request):
         request_name = request["Request"]
@@ -121,6 +133,22 @@ class Server(http.server.BaseHTTPRequestHandler):
 
                 return f'/{random_key}/video.mp4'
 
+        elif request_name == "Event":
+            state = self.forward_states.get(client_id) # or forward.State()
+            state.event_process(request)
+
+            data = Server.environments[client_id].interface_render2()
+            data = data[:1] + [[
+                (lambda action: forward.Button(label=action, on_click=lambda: Server.environments[client_id].step(Server.actions_map[action], 6)))(action)
+                for action in Server.actions_map.keys()
+            ]] + data[1:]
+
+            self.forward_states[client_id] = self.forward_states.get(client_id) or forward.State()
+            data_payload = self.forward_states[client_id].payload_format(data)
+
+            return {
+                'Data': data_payload
+            }
 
         elif request_name == "Reset":
             game = request["Game"]
@@ -131,9 +159,14 @@ class Server(http.server.BaseHTTPRequestHandler):
             Server.environments[client_id] = retro_server.RetroClient(game=game)
             frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
 
-            import forward
             data = Server.environments[client_id].interface_render2()
-            data_payload = forward.payload_format(data)
+            data = data[:1] + [[
+                (lambda action: forward.Button(label=action, on_click=lambda: Server.environments[client_id].step(Server.actions_map[action], 6)))(action)
+                for action in Server.actions_map.keys()
+            ]] + data[1:]
+
+            self.forward_states[client_id] = self.forward_states.get(client_id) or forward.State()
+            data_payload = self.forward_states[client_id].payload_format(data)
 
             return {
                 'Observation': frame,
@@ -153,9 +186,14 @@ class Server(http.server.BaseHTTPRequestHandler):
             frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
             print("TIME", time.time() - t0)
 
-            import forward
             data = Server.environments[client_id].interface_render2()
-            data_payload = forward.payload_format(data)
+            ## data += [
+            ##     forward.Button(label="LEFT", on_click=lambda: print("L.click!")),
+            ##     forward.Button(label="RIGHT", on_click=lambda: print("R.click!"))
+            ## ]
+
+            self.forward_states[client_id] = self.forward_states.get(client_id) or forward.State()
+            data_payload = self.forward_states[client_id].payload_format(data)
 
             return {
                 'Observation': frame,

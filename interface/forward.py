@@ -5,48 +5,68 @@ import matplotlib
 
 import uuid
 
+class State:
+    def __init__(self):
+        self.state = {}
 
-def payload_format(data):
-    import numbers
+    def event_process(self, event):
+        if event['Type'] == "Button_OnClick":
+            self.state[event['Id']].on_click()
 
-    data_payload = []
-    for element in data:
-        if isinstance(element, matplotlib.figure.Figure):
-            file_id = uuid.uuid4()
-            file_name = f"/tmp/{file_id}.png"
+    def payload_format(self, data):
+        import numbers
 
-            element.savefig(file_name)
-            data_payload.append({"Type": "Image",
-                                 "Value": f"{file_id}.png"})
+        data_payload = []
+        for element in data:
+            if isinstance(element, matplotlib.figure.Figure):
+                file_id = uuid.uuid4()
+                file_name = f"/tmp/{file_id}.png"
 
-        elif isinstance(element, Image):
-            data_payload.append(element.json())
+                element.savefig(file_name)
+                data_payload.append({"Type": "Image",
+                                    "Value": f"{file_id}.png"})
 
-        elif isinstance(element, (np.ndarray, torch.Tensor)):
-            data_payload.append({"Type": "Array2D",
-                                 "Value": element.tolist()})
+            elif isinstance(element, Image):
+                data_payload.append(element.json())
 
-        elif isinstance(element, numbers.Integral):
-            data_payload.append({"Type": "Number",
-                                 "Value": int(element)})
+            elif isinstance(element, Button):
+                self.state[element.id] = element
+                data_payload.append(element.json())
 
-        elif isinstance(element, numbers.Number):
-            data_payload.append({"Type": "Number",
-                                 "Value": float(element)})
-
-        elif isinstance(element, list):
-            if isinstance(element[0], list):
+            elif isinstance(element, (np.ndarray, torch.Tensor)):
                 data_payload.append({"Type": "Array2D",
+                                     "Value": element.tolist()})
+
+            elif isinstance(element, numbers.Integral):
+                data_payload.append({"Type": "Number",
+                                     "Value": int(element)})
+
+            elif isinstance(element, numbers.Number):
+                data_payload.append({"Type": "Number",
+                                     "Value": float(element)})
+
+            elif isinstance(element, str):
+                data_payload.append({"Type": "String",
                                      "Value": element})
 
-            elif isinstance(element[0], Image):
-                data_payload.append({"Type": "ForwardList",
-                                     "Value": payload_format(element)})
 
-        else:
-            print(">>>>>>>>>>>>", type(element))
+            elif isinstance(element, list):
+                if isinstance(element[0], list):
+                    data_payload.append({"Type": "Array2D",
+                                         "Value": element})
 
-    return data_payload
+                elif isinstance(element[0], Image):
+                    data_payload.append({"Type": "ForwardList",
+                                         "Value": self.payload_format(element)})
+
+                elif isinstance(element[0], Button):
+                    data_payload.append({"Type": "ForwardList",
+                                         "Value": self.payload_format(element)})
+
+            else:
+                print(">>>>>>>>>>>>", type(element))
+
+        return data_payload
 
 
 
@@ -58,6 +78,22 @@ class Array:
         for row in data:
             for column in row:
                 pass
+
+class Button:
+    def __init__(self, label, on_click, enabled=True):
+        self.label = label
+        self.on_click = on_click
+        self.enabled = enabled
+
+        self.id = str(uuid.uuid4())
+
+    def json(self):
+        return {
+            "Type": "Button",
+            "Value": self.label,
+            "Id": self.id,
+            "IsEnabled": self.enabled
+        }
 
 class Image:
     def __init__(self, array, elements=[], display_scale=1):

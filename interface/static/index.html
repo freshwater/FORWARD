@@ -24,33 +24,12 @@
     <div class="spacing"></div>
     <div id="data-display-container" class="container"></div>
     <div class="spacing"></div>
-    <div style="height: 40px"></div>
+    <div style="height: 18px"></div>
     <div class="container">
         <div class="container-horizontal controls">
-            <span style="display: flex; flex-direction: column; align-items: center;">
-                <button onclick="action(actionsMap['UP'])" style="margin-bottom: 1px">UP</button>
-                <span style="display: flex; flex-direction: row">
-                    <button onclick="action(actionsMap['LEFT'])">LEFT</button>
-                    <button onclick="action(actionsMap['RIGHT'])" style="margin-left: 1px">RIGHT</button>
-                </span>
-                <button onclick="action(actionsMap['DOWN'])" style="margin-top: 1px">DOWN</button>
-            </span> &nbsp;
-            <button onclick="action(actionsMap['B'])">B</button> &nbsp;
-            <button onclick="action(actionsMap['A'])">A</button>
-        </div>
-        <div class="spacing"></div>
-        <div class="container-horizontal controls">
             <button onclick="reset()" class="reset-button">RESET</button> &nbsp;
-            <button onclick="action(actionsMap['NONE'])">NONE</button> &nbsp;
             <!--button onclick="run(event.target)">RUN</button> &nbsp; -->
         </div>
-        <script>
-            var buttons = document.querySelectorAll('button[onclick]');
-            let maxWidth = Math.max(...[...buttons].map(button => button.clientWidth));
-            let maxHeight = Math.max(...[...buttons].map(button => button.clientHeight));
-            [...buttons].forEach(button => button.style.width = `${maxWidth}px`);
-            [...buttons].forEach(button => button.style.height = `${maxHeight + 5}px`);
-        </script>
         <div class="spacing"></div>
         <div style="height: 7px"></div>
         <span style="display: flex; flex-direction: row">

@@ -39,93 +39,6 @@ query({'Request': 'AvailableGames', 'ClientId': clientId}, function(response) {
     ReactDOM.render(<GameSelection gamesList={games} selectedGame={"SuperMarioBros-Nes"}/>, document.querySelector('.title'));
 });
 
-let actionsMap = {
-    'UP':        [0, 0, 0, 0, 1, 0, 0, 0, 0],
-    'DOWN':      [0, 0, 0, 0, 0, 1, 0, 0, 0],
-    'LEFT':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
-    'RIGHT':     [0, 0, 0, 0, 0, 0, 0, 1, 0],
-    'NONE':      [0, 0, 0, 0, 0, 0, 0, 0, 0],
-    'B':         [1, 0, 0, 0, 0, 0, 0, 0, 0],
-    'A':         [0, 0, 0, 0, 0, 0, 0, 0, 1],
-};
-
-let lockedAction = actionsMap['NONE'];
-let activeAction = actionsMap['NONE'];
-
-function actionsAdd(action1, action2) {
-    return action1 .map ((_, i) => Math.min(1, action1[i] + action2[i]))
-}
-
-function actionsSubtract(action1, action2) {
-    return action1 .map ((_, i) => Math.max(0, action1[i] - action2[i]))
-}
-
-let lockedButtonsCount = 0;
-
-let runIntervalId = null;
-
-let controls = [...document.querySelectorAll('.controls button:not(.reset-button)')];
-controls .map (function(button) {
-    let buttonOnClick = button.onclick;
-    button.onclick = null;
-
-    let state = "Unpressed";
-    let timeout = null;
-
-    // todo: counterstates
-    button.addEventListener("mousedown", function(event) {
-        if (state === "Unpressed") {
-            state = "Down";
-
-            timeout = setTimeout(function() {
-                if (state === "Down") {
-                    state = "Locked";
-                    lockedButtonsCount += 1;
-                    lockedAction = actionsAdd(lockedAction, actionsMap[button.innerText]);
-                    button.classList.add("control-locked");
-
-                    if (lockedButtonsCount === 1) {
-                        runContinuous();
-                    }
-                }
-            }, 400);
-
-        } else if (state === "Locked") {
-            state = "Unpressed";
-            lockedButtonsCount -= 1;
-            button.classList.remove("control-locked");
-            lockedAction = actionsSubtract(lockedAction, actionsMap[button.innerText]);
-        }
-    });
-
-    button.addEventListener("mouseup", function(event) {
-        if (state === "Down") {
-            state = "Unpressed";
-            activeAction = actionsMap[button.innerText];
-            clearTimeout(timeout);
-
-            if (lockedButtonsCount === 0) {
-                buttonOnClick();
-            } else {
-                /*runContinuous();*/
-            }
-        }
-    });
-});
-
-function runContinuous() {
-    function doAction() {
-        let action1 = actionsAdd(lockedAction, activeAction);
-        activeAction = actionsMap['NONE'];
-
-        if (lockedButtonsCount > 0) {
-            action(action1, doAction);
-        }
-    }
-
-    doAction();
-}
-
 let downloadId = new String(Math.random()).substring(2);
 ReactDOM.render([<DownloadsSelection id={downloadId} values={[".mp4 Replay Video", ".bk2 Replay Data", ".json Action Sequence"]}
                                         initialValue=".mp4 Replay Video" />,
@@ -175,6 +88,9 @@ class DataDisplay extends React.Component {
                     } else if (type === "Number") {
                         return <span key={mainIndex} className="number">{value}</span>;
 
+                    } else if (type === "String") {
+                        return <span key={mainIndex} className="string">{value}</span>;
+
                     } else if (type === "Array2D") {
                         let rowText = (row) => `[${row}]`;
 
@@ -190,7 +106,31 @@ class DataDisplay extends React.Component {
                         </table>;
                     }
                     else if (type === "ForwardList") {
+                        /*let buttonIds = value .flatMap (({Type: type, Id: id}) => type === 'Button' ? [id] : [])
+
+                        setTimeout(function() {
+                            let buttons = buttonIds .map ((id) => document.getElementById(id));
+                            let maxWidth = Math.max(...[...buttons].map(button => button.clientWidth));
+                            let maxHeight = Math.max(...[...buttons].map(button => button.clientHeight));
+                            [...buttons].forEach(button => button.style.width = `${maxWidth}px`);
+                            [...buttons].forEach(button => button.style.height = `${maxHeight + 5}px`);
+                        }, 10)*/
+
                         return <DataDisplay data={value} isNested={true} />;
+                    }
+                    else if (type === "Button") {
+                        let onClick = function() {
+                            query({
+                                "Request": "Event",
+                                "ClientId": clientId,
+                                "Type": "Button_OnClick",
+                                "Id": obj['Id']
+                            }, function(response) {
+                                console.log("RESPONSE")
+                                setDisplay(response['Data']);
+                            })
+                        }
+                        return <button id={obj['Id']} key={obj['Id']} onClick={onClick}>{value}</button>
                     }
 
 
@@ -217,15 +157,14 @@ function clipboardCopy(text, event) {
 
 function setDisplay(data) {
     let dataDisplay = ReactDOM.render(<DataDisplay data={data}/>, document.getElementById('data-display-container'));
-    // dataDisplay.forceUpdate();
 }
 
 var currentFrameIndex = 0;
 function download(resourceType, event) {
     console.log('resourceType', resourceType);
-    if (currentFrameIndex === 0) {
+    /*if (currentFrameIndex === 0) {
         return ;
-    }
+    }*/
 
     let body = document.body;
     let element = event.target;
@@ -260,8 +199,6 @@ let lastSelectedGame = null;
 function reset(game=lastSelectedGame) {
     lastSelectedGame = game;
     document.title = game;
-
-    activeAction = actionsMap['NONE'];
 
     query({
         "Request": "Reset",

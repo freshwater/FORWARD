@@ -196,12 +196,11 @@ class Environment3:
 
         regions.append(frame_index_region)
 
-
         image = fwd.Image(self.frame, elements=regions)
 
         block_images = [image_F for encoding, image_F in sorted(self.blocks_seen_images)]
 
-        return [image, output, fwd.Image(output_array),
+        return [image, output, fwd.Image(output_array, display_scale=4),
                 {'Frame Index': self.frame_index,
                  'Reduction': fwd.Image(1 - output_array)},
                  len(block_images),
