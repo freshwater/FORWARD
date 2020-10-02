@@ -21,8 +21,10 @@ class Element:
             return List(object)
         elif isinstance(object, dict):
             return Dictionary(object)
+        # elif isinstance(object, matplotlib.axes.Axes):
+        #     return FileImage()
         else:
-            print(">", object)
+            print("\n\n>", object, "\n\n")
             1 / 0
 
 
@@ -104,6 +106,60 @@ class Button(Element):
             self.on_click()
 
             return True
+
+class NumberInput(Element):
+    def __init__(self, label, minimum, maximum, value, on_change):
+        self.label = label
+        self.minimum = minimum
+        self.maximum = maximum
+        self.value = value
+        self.on_change = on_change
+
+        self.id = str(uuid.uuid4())
+
+    def json(self):
+        return {
+            "Type": "NumberInput",
+            "Value": self.value,
+            "Id": self.id,
+            "Minimum": minimum,
+            "Maximum": maximum
+        }
+
+
+class FileImage(Element):
+    def __init__(self, file, elements=[], dpi=2*75, display_scale=1):
+        self.file = file
+        self.elements = elements
+        self.display_scale = display_scale
+
+        # self.file = f"/tmp/{uuid.uuid4()}.png"
+        # import shutil
+        # shutil.copyfile(file, self.file)
+
+        import PIL.Image
+        image = PIL.Image.open(file)
+        height, width = image.size
+        height_dpi, width_dpi = image.info['dpi']
+        self.shape = height * 75 / height_dpi, width * 75 / width_dpi
+
+        # print("\n\ndpi\n\n", PIL.Image.open(file).info)
+
+    def json(self):
+        with open(self.file, 'rb') as file:
+            data = file.read()
+
+        import base64
+        encoded = base64.b64encode(data).decode()
+        url_encoded = f"data:image/png;base64,{encoded}"
+
+        self.json_cached = {"Type": "Image",
+                            "Value": url_encoded,
+                            "Shape": self.shape,
+                            "DisplayScale": self.display_scale,
+                            "Elements": [element.json() for element in self.elements]}
+
+        return self.json_cached
 
 
 class Image(Element):

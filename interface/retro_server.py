@@ -29,6 +29,11 @@ class Environment3:
 
         self.encodings = set()
         self.encodings_frame = set()
+        self.encodings_all = []
+
+        import sklearn.decomposition
+        import pickle
+        self.pca = pickle.load(open('models/pca_top_4_of_256.sklearn.decomposition.PCA', 'rb'))
 
         random_key = str(uuid.uuid4())
         self.image_files_folder = random_key
@@ -74,6 +79,7 @@ class Environment3:
         self.commitment_intervals_all.append(commitment_interval)
         
         self.blocks_identify(self.frame)
+        self.encodings_all.append(self.encodings_frame)
 
         return self.frame # , reward, is_done, information
 
@@ -196,6 +202,36 @@ class Environment3:
 
         block_images = [image_F for encoding, image_F in sorted(self.blocks_seen_images)]
 
+        import matplotlib.pyplot as plt
+
+        fig, ax1 = plt.subplots(figsize=(2, 2))
+
+        ax1.imshow(np.diff(self.encodings_all or [[0]], axis=0), aspect='auto', cmap='gray')
+        ax1.set_xticks(ticks=range(0, 9*15+1, 15));
+        plt.xticks(fontsize=6)
+        plt.yticks(fontsize=6)
+        ax1.set_title("Diffs", fontsize=8)
+
+        filename1 = f'/tmp/{uuid.uuid4()}.png'
+        plt.savefig(filename1, dpi=300)
+        plt.close()
+
+        fig, ax2 = plt.subplots(figsize=(2, 2))
+
+        if self.encodings_all != []:
+            all_x, all_y = self.pca.transform(self.encodings_all).T
+            ax2.plot(all_x, all_y, lw=0.2, color='gray')
+            ax2.scatter(all_x, all_y, lw=0, c=np.linspace(1, 0, num=len(all_x)), cmap='gray', s=4);
+
+        ax2.set_xlim(-0.76876307, 0.8960005)
+        ax2.set_ylim(-0.7623395, 1.0323112)
+        plt.xticks(fontsize=6)
+        plt.yticks(fontsize=6)
+        ax2.set_title("PCA", fontsize=8)
+
+        filename2 = f'/tmp/{uuid.uuid4()}.png'
+        plt.savefig(filename2, dpi=300)
+
         return [fwd.Image(self.frame, elements=regions, display_scale=2),
                 fwd.Image(output_array, display_scale=12),
 
@@ -204,6 +240,8 @@ class Environment3:
                  "B": fwd.Image(self.frame[::2,::2,2], color_map='Grayscale')},
 
                 fwd.Image(self.actions_all),
+                fwd.FileImage(file=filename1),
+                fwd.FileImage(file=filename2),
 
                 fwd.Array(output),
 
