@@ -17,7 +17,7 @@ from concurrent.futures import ProcessPoolExecutor as Executor
 # Quick hack to increase the video render quality.
 
 nes_shape = np.array([240, 224])
-nes_scale = 4
+nes_scale = 3
 
 def playback_movie(emulator, movie, monitor_csv=None, video_file=None, info_file=None, npy_file=None, viewer=None, video_delay=0, lossless=None, record_audio=True):
     ffmpeg_proc = None

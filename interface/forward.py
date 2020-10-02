@@ -32,14 +32,14 @@ class Element:
         if isinstance(self, List):
             for element in self.value:
                 if element.event_process(event):
-                    return
+                    return True
 
         elif isinstance(self, Dictionary):
             for key, value1 in self.value:
                 if key.event_process(event):
-                    return
+                    return True
                 elif value1.event_process(event):
-                    return
+                    return True
 
 
 class String(Element):

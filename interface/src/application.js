@@ -108,7 +108,7 @@ class DataDisplay extends React.Component {
             let height = value.length;
             let width = value.length > 0 ? value[0].length : 0;
 
-            let clipboardText = `np.array([\n${value .map (rowText) .join(",\n")}])`;
+            let clipboardText = `z = np.array([\n${value .map (rowText) .join(",\n")}])`;
             value = value.concat([Array(width).fill(" ")]);
 
             if (height*width > 0) {

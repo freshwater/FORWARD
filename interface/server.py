@@ -134,8 +134,10 @@ class Server(http.server.BaseHTTPRequestHandler):
                 return f'/{random_key}/video.mp4'
 
         elif request_name == "Event":
-            state = self.forward_states.get(client_id) # or forward.State()
-            state.event_process(request)
+            states = self.forward_states.get(client_id) # or forward.State()
+            for state in states:
+                if state.event_process(request):
+                    break
 
             data = Server.environments[client_id].interface_render2()
             data = data[:1] + [[
@@ -144,7 +146,10 @@ class Server(http.server.BaseHTTPRequestHandler):
             ]] + data[1:]
 
             data_element = forward.Element.to_element(data)
-            self.forward_states[client_id] = data_element
+            self.forward_states[client_id].append(data_element)
+
+            if len(self.forward_states[client_id]) > 10:
+                self.forward_states[client_id].pop(0)
 
             return {
                 'Data': data_element.json()
@@ -166,7 +171,7 @@ class Server(http.server.BaseHTTPRequestHandler):
             ]] + data[1:]
 
             data_element = forward.Element.to_element(data)
-            self.forward_states[client_id] = data_element
+            self.forward_states[client_id] = [data_element]
 
             return {
                 'Observation': frame,
