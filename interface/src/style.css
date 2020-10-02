@@ -5,104 +5,83 @@
 }
 
 .spacing {
-    height: 10px;
+    height: 20px;
 }
 
-.container {
+.list {
     display: flex;
     align-items: center;
     justify-items: center;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
 }
 
-.container-horizontal {
-    display: flex;
-    align-items: center;
-    justify-items: center;
+.container > .list > * {
+    margin: 3px;
 }
 
-#canvas {
-    border: 1px solid #5894f8;
-    background: #5894f8;
-}
-
-#blocks div {
+.list .list {
     line-height: 0px;
 }
 
-#blocks img {
-    width: 8px;
-    height: 8px;
-    border-right: 0.5px solid white;
-    border-bottom: 0.5px solid white;
-
-    background: #5894f8;
+.list .list > * {
+    margin: 0.5px;
 }
 
-table, table td, table tr {
-    padding: 1px;
-    margin: 0px;
-    border-spacing: 0px;
+.region, .number {
+    font-family: Consolas, 'Courier New', Courier, monospace;
 }
 
-.commitment-interval-input {
-    width: 37px;
-    text-align: center;
-}
-
-button {
-    user-select: none;
-}
-
-.control-locked {
-    background: #5894f8;
-    color: white;
-    /*border: 2px dashed blue;*/
-}
-
-.data-display {
+div.image {
+    overflow: auto;
     display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    flex-wrap: wrap;
 }
 
-.data-display .number {
-    padding: 5px;
-}
+/*.value div.image:hover {
+    resize: both;
+}*/
 
-.data-display table {
-    table-layout: fixed;
+/*.value img.image {
+    width: 100%;
+    height: auto;
+    display: inline-flex;
+}*/
+
+table.array {
     border-collapse: collapse;
+}
+
+table.array td {
+    font-family: Consolas, 'Courier New', Courier, monospace;
     font-size: 0.5em;
-    /*font-size: 5px;*/
-    font-family: Consolas, 'Courier New', monospace;
-    margin: 5px;
-}
-
-.data-display button {
-    margin: 1px;
-}
-
-.data-display .array td {
-    padding: 1px;
-    /*border: 0.5px solid #eee;*/
     text-align: center;
+    border: 0.5px solid #eee;
+    border-collapse: collapse;
 }
 
-.data-display .data-display {
-    line-height: 1px;
-    justify-content: left;
+table.array tr:last-child, .array tr:last-child td {
+    border: none;
 }
 
-.data-display .data-display img {
-    width: 8px;
-    height: 8px;
-    border-right: 0.5px solid white;
-    border-bottom: 0.5px solid white;
+.dictionary {
+    font-size: 0.95em;
+}
 
-    background: #5894f8;
+.dictionary td:first-child {
+    font-family: Consolas, 'Courier New', Courier, monospace;
+}
+
+.dictionary td:first-child:after {
+    color: #ccc;
+    font-weight: lighter;
+    content: ':';
+}
+
+button {
+    user-select: none;
 }
 
 #clipboard-input {
@@ -113,6 +92,11 @@ button {
 
 .clipboard-button {
     cursor: pointer;
+}
+
+.commitment-interval-input {
+    width: 37px;
+    text-align: center;
 }
 
 .reset-button {

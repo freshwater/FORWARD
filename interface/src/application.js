@@ -6,7 +6,7 @@ let clientId = new String(Math.random()).substring(2);
 class GameSelection extends React.Component {
     render() {
         return <select defaultValue={this.props.selectedGame}
-                        onChange={(event) => {/*this.setState({'selectedGame': event.target.value});*/ reset(event.target.value)}}> {
+                        onChange={(event) => {reset(event.target.value)}}> {
                 this.props.gamesList .map (
                     (gameTitle) => <option value={gameTitle} key={gameTitle}>{gameTitle}</option>
                 ) }
@@ -47,24 +47,31 @@ ReactDOM.render([<DownloadsSelection id={downloadId} values={[".mp4 Replay Video
                 document.querySelector('.downloads-selection'));
 
 class DataDisplay extends React.Component {
-    shouldComponentUpdate() {
-        return true;
-    }
-
     render() {
         let {Type: type, Value: value, ...object} = this.props.data;
+
         if (type === "List") {
             return <div className="list">
                 {value .map ((element, index) => <DataDisplay data={element} index={index} />)}
             </div>;
+
+        } else if (type === "Dictionary") {
+            return <table className="dictionary">
+                <tbody>
+                    {value .map (([key1, value1]) => <tr>
+                        <td className="key"><DataDisplay data={key1} /></td>
+                        <td className="value"><DataDisplay data={value1} /></td>
+                    </tr>)}
+                </tbody>
+            </table>;
+
         } else if (type === "Image") {
             let {Shape: shape, DisplayScale: displayScale, Elements: elements} = object;
 
             return <div key={this.props.index} style={{position: 'relative', display: 'inline-block'}}>
-                {this.props.isNested ?
-                    <img key={value} src={value} style={{imageRendering: 'pixelated'}} height={displayScale*shape[0]} width={displayScale*shape[1]}></img>
-                    :
-                    <img src={value} style={{imageRendering: 'pixelated'}} height={displayScale*shape[0]} width={displayScale*shape[1]}></img> }
+                <div className="image">
+                    <img src={value} className="image" style={{imageRendering: 'pixelated'}} height={displayScale*shape[0]} width={displayScale*shape[1]} />
+                </div>
 
                 { elements .map ( ({Type: type,
                                     Geometry: [[x1, y1], [x2, y2]], Color: [r, g, b, a],
@@ -72,7 +79,7 @@ class DataDisplay extends React.Component {
 
                     [x1, y1, x2, y2] = [displayScale*x1, displayScale*y1, displayScale*x2, displayScale*y2];
 
-                    return <span key={`region-${index}`} style={{
+                    return <span key={`region-${index}`} className="region" style={{
                                         position: 'absolute',
                                         left: x1, top: y1,
                                         width: x2 - x1,
@@ -90,7 +97,6 @@ class DataDisplay extends React.Component {
             </div>;
 
         } else if (type === "Number") {
-            console.log("loggeroni", value)
             return <span key={this.props.index} className="number">{value}</span>;
 
         } else if (type === "String") {
@@ -99,10 +105,15 @@ class DataDisplay extends React.Component {
         } else if (type === "Array2D") {
             let rowText = (row) => `[${row}]`;
 
-            let clipboardText = `np.array([\n${value .map (rowText) .join(",\n")}])`;
-            value = value.concat([Array(value[0].length).fill(" ")]);
+            let height = value.length;
+            let width = value.length > 0 ? value[0].length : 0;
 
-            value[value.length - 1][value[0].length - 1] = <span className="clipboard-button" title="Copy to Clipboard" onClick={(event) => clipboardCopy(clipboardText, event)}>📋</span>;
+            let clipboardText = `np.array([\n${value .map (rowText) .join(",\n")}])`;
+            value = value.concat([Array(width).fill(" ")]);
+
+            if (height*width > 0) {
+                value[height - 1 + 1][width - 1] = <span className="clipboard-button" title="Copy to Clipboard" onClick={(event) => clipboardCopy(clipboardText, event)}>📋</span>;
+            }
 
             return <table key={this.props.index} className="array">
                 <tbody>
@@ -120,7 +131,6 @@ class DataDisplay extends React.Component {
                     "Type": "Button_OnClick",
                     "Id": id
                 }, function (response) {
-                    console.log("RESPONSE")
                     setDisplay(response['Data']);
                 })
             };
@@ -135,17 +145,7 @@ class DataDisplay extends React.Component {
                 [...buttons].forEach(button => button.style.height = `${maxHeight + 5}px`);
             }, 10)*/
 
-            return <button id={id} key={id} onClick={onClick}>{value}</button>
-
-        } else if (type === "Dictionary") {
-            return <table>
-                <tbody>
-                    {value .map (([key1, value1]) => <tr>
-                        <td><DataDisplay data={key1} /></td>
-                        <td><DataDisplay data={value1} /></td>
-                    </tr>)}
-                </tbody>
-            </table>;
+            return <button id={id} key={id} className="button" onClick={onClick}>{value}</button>
 
         } else {
             return <div></div>;
@@ -167,7 +167,6 @@ function clipboardCopy(text, event) {
 }
 
 function setDisplay(data) {
-    console.log("DATA", data)
     let dataDisplay = ReactDOM.render(<DataDisplay data={data}/>, document.getElementById('data-display-container'));
 }
 
@@ -235,30 +234,6 @@ function reset(game=lastSelectedGame) {
         /* */
         let {Data: data} = response;
         setDisplay(data);
-    });
-}
-
-var commitmentInterval = 6;
-function action(action_, onResponse=function(){}) {
-    query({
-        "Request": "Action",
-        "Action": action_,
-        "CommitmentInterval": parseInt(commitmentInterval, 10),
-        "ClientId": clientId
-    }, function(response) {
-        let {Observation: obs,
-                BlockEncodings: encodings,
-                Blocks: blocks,
-                FrameIndex: frameIndex} = response;
-
-        currentFrameIndex = frameIndex;
-
-        onResponse();
-
-        /* */
-        let {Data: data} = response;
-        setDisplay(data);
-        
     });
 }
 

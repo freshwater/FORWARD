@@ -176,33 +176,6 @@ class Server(http.server.BaseHTTPRequestHandler):
                 'Data': data_element.json()
             }
 
-        elif request_name == "Action":
-            action = request["Action"]
-            commitment_interval = request["CommitmentInterval"]
-
-            import time
-            t0 = time.time()
-            Server.environments[client_id].step(action, commitment_interval)
-            frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
-            print("TIME", time.time() - t0)
-
-            data = Server.environments[client_id].interface_render2()
-            ## data += [
-            ##     forward.Button(label="LEFT", on_click=lambda: print("L.click!")),
-            ##     forward.Button(label="RIGHT", on_click=lambda: print("R.click!"))
-            ## ]
-
-            self.forward_states[client_id] = self.forward_states.get(client_id) or forward.State()
-            data_payload = self.forward_states[client_id].payload_format(data)
-
-            return {
-                'Observation': frame,
-                'BlockEncodings': encodings,
-                'Blocks': blocks,
-                'FrameIndex': frame_index,
-                'Data': data_payload
-            }
-
         raise NotImplementedError(request)
 
 
@@ -235,19 +208,32 @@ class Server(http.server.BaseHTTPRequestHandler):
         }
 
         import os.path
+        extension = os.path.splitext(self.path)[1]
 
         if self.path == '/':
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
 
-            if not Server.files_cache.get('static/index.html'):
-                with open('static/index.html', 'rb') as file:
-                    Server.files_cache['static/index.html'] = file.read()
+            if not Server.files_cache.get('/not_tmp/index.html'):
+                with open('/not_tmp/index.html', 'rb') as file:
+                    Server.files_cache['/not_tmp/index.html'] = file.read()
 
-            self.wfile.write(Server.files_cache['static/index.html'])
+            self.wfile.write(Server.files_cache['/not_tmp/index.html'])
 
-        elif (extension := os.path.splitext(self.path)[1]) in ['.js', '.css']:
+        elif self.path == '/favicon.ico':
+            self.wfile.write("WE DONT HAVE IT".encode())
+
+        elif extension == '.png':
+            self.send_response(200)
+            self.send_header('Content-Type', content_types['.png'])
+            self.send_header('Cache-Control', 'max-age=3')
+            self.end_headers()
+
+            with open('/tmp' + self.path, 'rb') as file:
+                self.wfile.write(file.read())
+
+        elif extension in ['.js', '.css']:
             self.send_response(200)
             self.send_header('Content-type', content_types[extension])
             self.end_headers()
@@ -258,21 +244,7 @@ class Server(http.server.BaseHTTPRequestHandler):
 
             self.wfile.write(Server.files_cache[self.path])
 
-        elif self.path == '/favicon.ico':
-            self.wfile.write("WE DONT HAVE IT".encode())
-
-        elif os.path.splitext(self.path)[1] == '.png':
-            self.send_response(200)
-            self.send_header('Content-Type', content_types['.png'])
-            self.send_header('Cache-Control', 'max-age=30')
-            self.end_headers()
-
-            with open('/tmp' + self.path, 'rb') as file:
-                self.wfile.write(file.read())
-
-        elif ((extension := os.path.splitext(self.path)[1])
-                in ['.bk2', '.json', '.mp4', '.mkv', '.webm']):
-
+        elif extension in ['.bk2', '.json', '.mp4', '.mkv', '.webm']:
             if not os.path.exists('/tmp' + self.path):
                 self.send_response(404)
             else:
@@ -283,6 +255,9 @@ class Server(http.server.BaseHTTPRequestHandler):
 
                 with open('/tmp' + self.path, 'rb') as file:
                     self.wfile.write(file.read())
+
+        else:
+            raise NotImplementedError(f"self.path . {extension}")
 
 
 def run(port=80):

@@ -175,7 +175,6 @@ class Environment3:
         height, width, depth = self.frame.shape
 
         import hashlib
-
         to_number = lambda x: (int(hashlib.sha1(x.encode()).hexdigest(), 16) % 100_000_000) / 100_000_000
 
         regions = []
@@ -189,23 +188,22 @@ class Environment3:
                                           label=output[i][j],
                                           label_color=[1, 1, 0, 0.75]))
 
-
-        frame_index_region = fwd.Region(geometry=[[width - 8, 0], [width, 8]],
+        frame_index_region = fwd.Region(geometry=[[width - 16, 0], [width, 8]],
                                         color=[0, 0, 0, 0],
                                         label=self.frame_index)
 
         regions.append(frame_index_region)
 
-        image = fwd.Image(self.frame, elements=regions)
-
         block_images = [image_F for encoding, image_F in sorted(self.blocks_seen_images)]
 
-        return [image,
-                fwd.Image(output_array, display_scale=4),
+        return [fwd.Image(self.frame, elements=regions, display_scale=2),
+                fwd.Image(output_array, display_scale=12),
 
                 {"R": fwd.Image(self.frame[::2,::2,0], color_map='Grayscale'),
                  "G": fwd.Image(self.frame[::2,::2,1], color_map='Grayscale'),
                  "B": fwd.Image(self.frame[::2,::2,2], color_map='Grayscale')},
+
+                fwd.Image(self.actions_all),
 
                 fwd.Array(output),
 
