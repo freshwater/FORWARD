@@ -121,6 +121,9 @@ class DataDisplay extends React.Component {
                 </tbody>
             </table>;
 
+        } else if (type === "ArrayPlot3D") {
+            return <ArrayPlot3D array={value} />;
+
         } else if (type === "Button") {
             let { Id: id } = object;
 
@@ -150,6 +153,125 @@ class DataDisplay extends React.Component {
         } else {
             return <div></div>;
         }
+    }
+}
+
+import * as THREE from './three/three.min.js';
+import { OrbitControls } from './three/OrbitControls.js';
+import { LightProbeGenerator } from './three/LightProbeGenerator.js';
+
+class ArrayPlot3D extends React.Component {
+    constructor() {
+        super();
+        this.domId = `${Math.random()}`;
+    }
+
+    componentDidMount() {
+        let camera, scene, renderer, cubeCamera;
+        let group = [];
+        let previousCameraPosition = new THREE.Vector3(0, 0, 0);
+
+        let domElement = document.getElementById(this.domId);
+
+        initialize(this.props.array);
+        animate();
+
+        function initialize(array) {
+            scene = new THREE.Scene();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(domElement.clientWidth, domElement.clientHeight);
+            // renderer.outputEncoding = THREE.sRGBEncoding;
+            domElement.appendChild(renderer.domElement);
+
+            let cubeRenderTarget = new THREE.WebGLCubeRenderTarget( 256, {
+                // encoding: THREE.sRGBEncoding,
+                format: THREE.RGBAFormat
+            } );
+
+            cubeCamera = new THREE.CubeCamera( 1, 1000, cubeRenderTarget );
+
+            let lightProbe = new THREE.LightProbe();
+            scene.add( lightProbe );
+
+            let urls = ['px', 'nx', 'py', 'ny', 'pz', 'nz'] .map (direction => `three/textures/${direction}.png`)
+
+            new THREE.CubeTextureLoader().load(urls, function (cubeTexture) {
+                // cubeTexture.encoding = THREE.sRGBEncoding;
+                scene.background = cubeTexture;
+                cubeCamera.update(renderer, scene);
+
+                lightProbe.copy(LightProbeGenerator.fromCubeRenderTarget(renderer, cubeRenderTarget));
+                scene.background = new THREE.Color(0xffffff);
+
+                let mean0 = array.length / 2;
+                array .forEach ( (axis1, index0) =>  {
+                    let mean1 = axis1.length / 2;
+                    axis1 .forEach ( (axis2, index1) => {
+                        let mean2 = axis2.length / 2;
+                        axis2 .forEach ( (value, index2) => {
+                            let material = new THREE.MeshStandardMaterial({
+                                // color: 0xff0000,
+                                color: 'rgb(168, 168, 168)',
+                                metalness: 0,
+                                roughness: 0,
+                                envMap: cubeTexture,
+                                envMapIntensity: 1,
+                                opacity: value,
+                                transparent: true
+                            });
+
+                            let k = 1;
+                            let geometry = new THREE.BoxBufferGeometry(k, k, k);
+                            geometry.translate(index0 + 0.5 - mean0, index1 + 0.5 - mean1, index2 + 0.5 - mean2);
+                            let mesh = new THREE.Mesh(geometry, material);
+
+                            group.push([mesh, new THREE.Vector3(index0, index1, index2)]);
+
+                            scene.add(mesh);
+                        } )
+                    } )
+                } );
+
+                renderer.render(scene, camera);
+            });
+
+            camera = new THREE.PerspectiveCamera( 70, domElement.clientWidth / domElement.clientHeight, 1, 10000 );
+            camera.position.z = 10;
+
+            let controls = new OrbitControls(camera, renderer.domElement);
+            controls.minDistance = 8;
+            controls.maxDistance = 20;
+            // controls.maxPolarAngle = Math.PI;
+
+            domElement.addEventListener('resize', onWindowResize, false);
+        }
+
+        function onWindowResize() {
+            camera.aspect = domElement.clientWidth / domElement.clientHeight;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(domElement.clientWidth, domElement.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Couldn't figure out a depth setting to automatically set
+            // the render order as back-to-front from any direction.
+            // This will work for now.
+            if (!camera.position.equals(previousCameraPosition) && Math.random() < 1 / 2) {
+                previousCameraPosition.copy(camera.position);
+                group .forEach ( ([child, position]) => { child.renderOrder = -camera.position.distanceTo(position) } );
+            }
+
+            renderer.render(scene, camera);
+        }
+    }
+
+    render() {
+        return <div id={this.domId} style={{background: 'red', width: 100, height: 100}}></div>
     }
 }
 

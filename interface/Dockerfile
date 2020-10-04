@@ -34,21 +34,22 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install --yes ffmpeg
 
 ## JSX
 
-WORKDIR /nodefolder
+WORKDIR /server_directory
+
 RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
 RUN apt-get install --yes nodejs \
                           npm
 
 RUN npm install @babel/core @babel/cli @babel/preset-react
-# RUN npm install --save-dev @babel/core @babel/preset-react
+RUN npm install webpack webpack-cli
 
-RUN mkdir /not_tmp
-COPY ["static", "/tmp/"]
-COPY ["src/", "/not_tmp/"]
-COPY ["roms", "/not_tmp/roms"]
+COPY static /tmp
+COPY src .
+COPY roms roms
 
-RUN python3 -m retro.import /not_tmp/roms
-RUN npx babel --presets @babel/react /not_tmp/application.js -o /not_tmp/application.js
+RUN python3 -m retro.import roms
+RUN npx babel --presets @babel/react application.js -o application.js
+RUN npx webpack application.js --mode=development --output application.js
 
 
 WORKDIR /workfolder

@@ -242,6 +242,7 @@ class Environment3:
                 fwd.Image(self.actions_all),
                 fwd.FileImage(file=filename1),
                 fwd.FileImage(file=filename2),
+                fwd.ArrayPlot3D(np.random.rand(5, 5, 5)),
 
                 fwd.Array(output),
 

@@ -212,6 +212,17 @@ class Image(Element):
 
             return self.json_cached
 
+class ArrayPlot3D(Element):
+    def __init__(self, array):
+        self.array = array.tolist()
+        self.shape = array.shape
+
+    def json(self):
+        return {"Type": "ArrayPlot3D",
+                "Value": self.array,
+                "Shape": self.shape}
+
+
 class Region(Element):
     def __init__(self, geometry, color=[0.5, 0.5, 0.5, 1.0], label="", label_color=[1, 1, 0, 1]):
         self.geometry = geometry

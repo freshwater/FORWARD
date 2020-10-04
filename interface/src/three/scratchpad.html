@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>three.js webgl - geometry - cube</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+        <link type="text/css" rel="stylesheet" href="main.css">
+    </head>
+    <body>
+
+    <script type="module">
+
+        import * as THREE from './build/three.module.js';
+        import { OrbitControls } from './jsm/controls/OrbitControls.js';
+        import { LightProbeGenerator } from './jsm/lights/LightProbeGenerator.js';
+
+        let camera, scene, renderer, mesh, cubeCamera;
+        let group = [];
+        let previousCameraPosition = new THREE.Vector3(0, 0, 0);
+
+        initialize([ [[0, 1, 1, 0], [1, 0, 0, 1]],
+                     [[1, 0, 0, 1], [0, 1, 1, 0]],
+                     [[0, 0, 0, 0], [0, 0, 1, 0]],
+                     [[0, 0, 0, 0], [0, 1, 1, 0]],
+                     [[0, 0, 0, 0], [0, 1, 0, 0]],
+                     [[0, 0, 0, 0], [0, 0, 1, 0]],
+                     [[0, 0, 0, 0], [0, 1, 0, 0]],
+                    ]);
+
+        animate();
+
+        function initialize(array) {
+            camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 1, 10000 );
+            camera.position.z = 40;
+
+            scene = new THREE.Scene();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            // renderer.outputEncoding = THREE.sRGBEncoding;
+            document.body.appendChild(renderer.domElement);
+
+            let cubeRenderTarget = new THREE.WebGLCubeRenderTarget( 256, {
+                // encoding: THREE.sRGBEncoding, // since gamma is applied during rendering, the cubeCamera renderTarget texture encoding must be sRGBEncoding
+                format: THREE.RGBAFormat
+            } );
+
+            cubeCamera = new THREE.CubeCamera( 1, 1000, cubeRenderTarget );
+
+            // let light = new THREE.PointLight(0xffffff, 1);
+            // // let light = new THREE.AmbientLight( 0xffffff, 1 );
+            scene.background = new THREE.Color(0xffffff);
+            // camera.add(light)
+
+            let lightProbe = new THREE.LightProbe();
+            scene.add( lightProbe );
+
+            let genCubeUrls = function (prefix, postfix) {
+                return [
+                    prefix + 'px' + postfix, prefix + 'nx' + postfix,
+                    prefix + 'py' + postfix, prefix + 'ny' + postfix,
+                    prefix + 'pz' + postfix, prefix + 'nz' + postfix
+                ];
+            };
+
+            let urls = genCubeUrls( 'textures/cube/pisa/', '.png' );
+
+            new THREE.CubeTextureLoader().load(urls, function (cubeTexture) {
+                // cubeTexture.encoding = THREE.sRGBEncoding;
+                scene.background = cubeTexture;
+                cubeCamera.update(renderer, scene);
+
+                lightProbe.copy(LightProbeGenerator.fromCubeRenderTarget(renderer, cubeRenderTarget));
+                scene.background = new THREE.Color(0xffffff);
+
+                let mean0 = array.length / 2;
+                array .forEach ( (axis1, index0) =>  {
+                    let mean1 = axis1.length / 2;
+                    axis1 .forEach ( (axis2, index1) => {
+                        let mean2 = axis2.length / 2;
+                        axis2 .forEach ( (value, index2) => {
+                            let material = new THREE.MeshStandardMaterial({
+                                // color: 0xffffff,
+                                // color: 0xff0000,
+                                color: 'orange',
+                                metalness: 0,
+                                roughness: 0,
+                                envMap: cubeTexture,
+                                envMapIntensity: 1,
+                                opacity: value === 0 ? 0.1 : 0.95,
+                                transparent: true
+                            });
+
+                            let k = 1;
+                            let geometry = new THREE.BoxBufferGeometry(k, k, k);
+                            geometry.translate(index0 - mean0, index1 - mean1, index2 - mean2);
+                            let mesh = new THREE.Mesh(geometry, material);
+
+                            group.push([mesh, new THREE.Vector3(index0, index1, index2)]);
+
+                            scene.add(mesh);
+                        } )
+                    } )
+                } );
+            
+                renderer.render(scene, camera);
+            });
+
+            let controls = new OrbitControls(camera, renderer.domElement);
+            controls.minDistance = 10;
+            controls.maxDistance = 50;
+            // controls.maxPolarAngle = Math.PI;
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Couldn't figure out a depth setting to automatically set
+            // the render order as back-to-front from any direction.
+            // This will work for now.
+            if (!camera.position.equals(previousCameraPosition) && Math.random() < 1 / 2) {
+                previousCameraPosition.copy(camera.position);
+                group .forEach ( ([child, position]) => { child.renderOrder = -camera.position.distanceTo(position) } );
+            }
+
+            renderer.render(scene, camera);
+        }
+
+    </script>
+
+    </body>
+</html>

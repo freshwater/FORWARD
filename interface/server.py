@@ -135,7 +135,7 @@ class Server(http.server.BaseHTTPRequestHandler):
 
         elif request_name == "Event":
             states = self.forward_states.get(client_id) # or forward.State()
-            for state in states:
+            for state in reversed(states):
                 if state.event_process(request):
                     break
 
@@ -148,7 +148,7 @@ class Server(http.server.BaseHTTPRequestHandler):
             data_element = forward.Element.to_element(data)
             self.forward_states[client_id].append(data_element)
 
-            if len(self.forward_states[client_id]) > 10:
+            if len(self.forward_states[client_id]) > 30:
                 self.forward_states[client_id].pop(0)
 
             return {
@@ -207,7 +207,9 @@ class Server(http.server.BaseHTTPRequestHandler):
         content_types = {
             '.js': 'application/javascript',
             '.css': 'text/css',
+            '.html': 'text/html',
             '.png': 'image/png',
+            '.gif': 'image/gif',
             '.mp4': 'video/mp4',
             '.webm': 'video/webm'
         }
@@ -220,14 +222,25 @@ class Server(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/html')
             self.end_headers()
 
-            if not Server.files_cache.get('/not_tmp/index.html'):
-                with open('/not_tmp/index.html', 'rb') as file:
-                    Server.files_cache['/not_tmp/index.html'] = file.read()
+            if not Server.files_cache.get('/server_directory/index.html'):
+                with open('/server_directory/index.html', 'rb') as file:
+                    Server.files_cache['/server_directory/index.html'] = file.read()
 
-            self.wfile.write(Server.files_cache['/not_tmp/index.html'])
+            self.wfile.write(Server.files_cache['/server_directory/index.html'])
 
         elif self.path == '/favicon.ico':
             self.wfile.write("WE DONT HAVE IT".encode())
+
+        elif extension in ['.js', '.css', '.html', '.gif'] or (extension == '.png' and '/textures/' in self.path):
+            self.send_response(200)
+            self.send_header('Content-type', content_types[extension])
+            self.end_headers()
+
+            if not Server.files_cache.get(self.path):
+                with open('/server_directory' + self.path, 'rb') as file:
+                    Server.files_cache[self.path] = file.read()
+
+            self.wfile.write(Server.files_cache[self.path])
 
         elif extension == '.png':
             self.send_response(200)
@@ -237,17 +250,6 @@ class Server(http.server.BaseHTTPRequestHandler):
 
             with open('/tmp' + self.path, 'rb') as file:
                 self.wfile.write(file.read())
-
-        elif extension in ['.js', '.css']:
-            self.send_response(200)
-            self.send_header('Content-type', content_types[extension])
-            self.end_headers()
-
-            if not Server.files_cache.get(self.path):
-                with open('/not_tmp' + self.path, 'rb') as file:
-                    Server.files_cache[self.path] = file.read()
-
-            self.wfile.write(Server.files_cache[self.path])
 
         elif extension in ['.bk2', '.json', '.mp4', '.mkv', '.webm']:
             if not os.path.exists('/tmp' + self.path):

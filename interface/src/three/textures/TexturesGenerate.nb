@@ -1,0 +1,4 @@
+In[79]:= SetDirectory[NotebookDirectory[]];
+image[]:=GaussianFilter[#,3]&@ImageApply[#^(1/4)&,Image[RandomReal[{0,1},16{1,1}]]];
+
+Export[#<>".png",image[]]&/@{"nx","ny","nz","px","py","pz"};
