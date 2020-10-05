@@ -214,8 +214,15 @@ class Image(Element):
 
 class ArrayPlot3D(Element):
     def __init__(self, array):
-        self.array = array.tolist()
-        self.shape = array.shape
+        array = np.array(array)
+
+        if np.max(array) == np.min(array):
+            array.fill(1)
+        else:
+            rescaled = (array - np.min(array)) / (np.max(array) - np.min(array))
+
+        self.array = rescaled.tolist()
+        self.shape = rescaled.shape
 
     def json(self):
         return {"Type": "ArrayPlot3D",

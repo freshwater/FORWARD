@@ -172,9 +172,15 @@ class ArrayPlot3D extends React.Component {
         let {Value: array, Shape: shape} = this.props.data;
         let totalCount = shape[0] * shape[1] * shape[2];
 
+        let format = 0;
+        if (shape.length === 4) {
+            format = shape[3];
+        }
+
         let camera, scene, renderer, cubeCamera;
         let mesh = null;
         let positionsIndices = [];
+        let buckets = [...new Array(totalCount + 1)] .map (() => []);
         let instanceColorsOriginal = new Float32Array(4*totalCount);
         let instanceColors = new Float32Array(4*totalCount);
         let previousCameraPosition = new THREE.Vector3(0, 0, 0);
@@ -187,7 +193,7 @@ class ArrayPlot3D extends React.Component {
         function initialize(array) {
             scene = new THREE.Scene();
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(domElement.clientWidth, domElement.clientHeight);
             domElement.appendChild(renderer.domElement);
@@ -243,23 +249,34 @@ class ArrayPlot3D extends React.Component {
                 array .forEach ( (axis1, index0) =>  {
                     axis1 .forEach ( (axis2, index1) => {
                         axis2 .forEach ( (value, index2) => {
-                            template.position.set(k*index0 + k*0.5 - mean0,
-                                                  k*index1 + k*0.5 - mean1,
-                                                  k*index2 + k*0.5 - mean2);
+                            let position = new THREE.Vector3(-(k*index0 + k*0.5 - mean0),
+                                                             -(k*index1 + k*0.5 - mean1),
+                                                             -(k*index2 + k*0.5 - mean2))
+
+                            template.position.copy(position);
 
                             template.updateMatrix();
 
                             mesh.setMatrixAt(index, template.matrix);
 
-                            positionsIndices.push([
-                                /* position */ new THREE.Vector3(k*index0 + k*0.5 - mean0, k*index1 + k*0.5 - mean1, k*index2 + k*0.5 - mean2),
-                                /* indexOriginal */ index
-                            ])
+                            positionsIndices.push([position, index, 0]);
 
-                            instanceColorsOriginal[4*index + 0] = 0.6;
-                            instanceColorsOriginal[4*index + 1] = 0.6;
-                            instanceColorsOriginal[4*index + 2] = 0.6;
-                            instanceColorsOriginal[4*index + 3] = value;
+                            if (format === 0) {
+                                instanceColorsOriginal[4*index + 0] = 0.55;
+                                instanceColorsOriginal[4*index + 1] = 0.55;
+                                instanceColorsOriginal[4*index + 2] = 0.55;
+                                instanceColorsOriginal[4*index + 3] = value;
+                            } else if (format === 3) {
+                                instanceColorsOriginal[4*index + 0] = value[0];
+                                instanceColorsOriginal[4*index + 1] = value[1];
+                                instanceColorsOriginal[4*index + 2] = value[2];
+                                instanceColorsOriginal[4*index + 3] = 0.8;
+                            } else if (format === 4) {
+                                instanceColorsOriginal[4*index + 0] = value[0];
+                                instanceColorsOriginal[4*index + 1] = value[1];
+                                instanceColorsOriginal[4*index + 2] = value[2];
+                                instanceColorsOriginal[4*index + 3] = value[3];
+                            }
 
                             index += 1;
                         } )
@@ -325,25 +342,54 @@ class ArrayPlot3D extends React.Component {
 
                 let template = new THREE.Object3D();
 
-                positionsIndices.sort(([a], [b]) => {
-                    return camera.position.distanceTo(a) <= camera.position.distanceTo(b) ? 1 : -1;
+                let t0 = performance.now();
+
+                /*
+                    Bucket sort with number of buckets = n.
+                */
+
+                // Find min/max
+                let min = 99999;
+                let max = -99999;
+                positionsIndices .forEach (([position], index) => {
+                    let distance = camera.position.distanceTo(position);
+                    positionsIndices[index][2] = distance;
+                    if (distance < min) { min = distance; }
+                    if (distance > max) { max = distance; }
                 });
 
+                // Bucketize
+                buckets .forEach ((_, index) => { buckets[index] = [] });
+                let increment = 1 / positionsIndices.length;
+                positionsIndices .forEach ((tuple) => {
+                    // ignore fully transparent blocks
+                    if (instanceColorsOriginal[4*tuple[1] + 3] !== 0) {
+                        let cameraDistance = tuple[2];
+                        cameraDistance = (cameraDistance - min) / (max - min);
+                        cameraDistance = 1 - cameraDistance;
+
+                        buckets[Math.floor(cameraDistance / increment)].push(tuple);
+                    }
+                });
+
+                // console.log('z.', performance.now() - t0);
+
+                // Reassign positions and colors
                 let index = 0;
-                for (let [position, indexOriginal] of positionsIndices) {
-                    template.position.copy(position);
+                buckets .forEach ( (bucket) => {
+                    bucket .forEach (([position, indexOriginal]) => {
+                        template.position.copy(position);
+                        template.updateMatrix();
+                        mesh.setMatrixAt(index, template.matrix);
 
-                    template.updateMatrix();
+                        instanceColors[4*index + 0] = instanceColorsOriginal[4*indexOriginal + 0];
+                        instanceColors[4*index + 1] = instanceColorsOriginal[4*indexOriginal + 1];
+                        instanceColors[4*index + 2] = instanceColorsOriginal[4*indexOriginal + 2];
+                        instanceColors[4*index + 3] = instanceColorsOriginal[4*indexOriginal + 3];
 
-                    mesh.setMatrixAt(index, template.matrix);
-
-                    instanceColors[4*index + 0] = instanceColorsOriginal[4*indexOriginal + 0];
-                    instanceColors[4*index + 1] = instanceColorsOriginal[4*indexOriginal + 1];
-                    instanceColors[4*index + 2] = instanceColorsOriginal[4*indexOriginal + 2];
-                    instanceColors[4*index + 3] = instanceColorsOriginal[4*indexOriginal + 3];
-
-                    index += 1;
-                }
+                        index += 1;
+                    });
+                });
 
                 mesh.instanceMatrix.needsUpdate = true;
                 mesh.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(instanceColors, 4));

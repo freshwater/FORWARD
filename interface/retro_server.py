@@ -232,11 +232,37 @@ class Environment3:
         filename2 = f'/tmp/{uuid.uuid4()}.png'
         plt.savefig(filename2, dpi=300)
 
+        def ring(width, radius):
+            xy = np.indices([width, width])
+            arr = np.linalg.norm(xy.T - width // 2, axis=2).T
+            arr = np.abs(arr - radius)
+            arr = (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
+            arr = (1 - arr)**10
+            arr[arr < 0.85] = arr[arr < 0.85]**4
+
+            return arr
+
+        arr = np.stack([ring(width=121, radius=r/2) for r in range(30, 60, 2)])
+
+        frame = self.frame
+        padded = 255*np.ones((frame.shape[0], frame.shape[1], frame.shape[2]+1))
+        padded[:, :, :frame.shape[2]] = frame
+        frame = padded
+
+        colors, counts = np.unique(frame.reshape(-1, 4), axis=0, return_counts=True)
+        background = colors[counts.argmax()]
+        mask = frame.reshape(-1, 4).dot(background) == background.dot(background)
+        frame.reshape(-1, 4)[mask] = [0, 0, 0, 0]
+
         return [fwd.Image(self.frame, elements=regions, display_scale=2),
 
                 fwd.ArrayPlot3D(np.random.rand(5, 5, 5)),
+                # fwd.ArrayPlot3D([self.frame]),
+                fwd.ArrayPlot3D([frame]),
                 fwd.ArrayPlot3D(np.random.rand(40, 25, 15)),
+                fwd.ArrayPlot3D(np.random.rand(140, 155, 15)),
                 fwd.ArrayPlot3D(np.random.rand(15, 15, 15)),
+                fwd.ArrayPlot3D(arr),
 
                 fwd.Image(output_array, display_scale=12),
 
