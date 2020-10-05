@@ -3,6 +3,8 @@
 
 let clientId = new String(Math.random()).substring(2);
 
+document.body.style.background = 'black';
+
 class GameSelection extends React.Component {
     render() {
         return <select defaultValue={this.props.selectedGame}
@@ -122,7 +124,7 @@ class DataDisplay extends React.Component {
             </table>;
 
         } else if (type === "ArrayPlot3D") {
-            return <ArrayPlot3D array={value} />;
+            return <ArrayPlot3D data={this.props.data} />;
 
         } else if (type === "Button") {
             let { Id: id } = object;
@@ -173,7 +175,9 @@ class ArrayPlot3D extends React.Component {
 
         let domElement = document.getElementById(this.domId);
 
-        initialize(this.props.array);
+        let {Value: array, Shape: shape} = this.props.data;
+
+        initialize(array);
         animate();
 
         function initialize(array) {
@@ -182,7 +186,6 @@ class ArrayPlot3D extends React.Component {
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(domElement.clientWidth, domElement.clientHeight);
-            // renderer.outputEncoding = THREE.sRGBEncoding;
             domElement.appendChild(renderer.domElement);
 
             let cubeRenderTarget = new THREE.WebGLCubeRenderTarget( 256, {
@@ -193,7 +196,7 @@ class ArrayPlot3D extends React.Component {
             cubeCamera = new THREE.CubeCamera( 1, 1000, cubeRenderTarget );
 
             let lightProbe = new THREE.LightProbe();
-            scene.add( lightProbe );
+            scene.add(lightProbe);
 
             let urls = ['px', 'nx', 'py', 'ny', 'pz', 'nz'] .map (direction => `three/textures/${direction}.png`)
 
@@ -205,45 +208,103 @@ class ArrayPlot3D extends React.Component {
                 lightProbe.copy(LightProbeGenerator.fromCubeRenderTarget(renderer, cubeRenderTarget));
                 scene.background = new THREE.Color(0xffffff);
 
-                let mean0 = array.length / 2;
+                let scale = 100;
+
+                let max = Math.max(...shape);
+                let rescale = scale / max;
+                let mean0 = rescale * shape[0] / 2;
+                let mean1 = rescale * shape[1] / 2;
+                let mean2 = rescale * shape[2] / 2;
+
+                let t0 = performance.now()
+
+                let material = new THREE.MeshStandardMaterial({
+                    color: 'rgb(168, 168, 168)',
+                    metalness: 0,
+                    roughness: 0,
+                    envMap: cubeTexture,
+                    envMapIntensity: 1,
+                    transparent: true,
+                });
+
+                var instanceColors = [];
+
+                let totalCount = shape[0] * shape[1] * shape[2];
+
+                for (var i = 0; i < totalCount; i++) {
+                    instanceColors.push(Math.random());
+                    instanceColors.push(Math.random());
+                    instanceColors.push(Math.random());
+                    instanceColors.push(Math.random());
+                }
+
+                let k = scale / max;
+                let geometry = new THREE.BoxBufferGeometry(k, k, k);
+
+                let mesh = new THREE.InstancedMesh(geometry, material, totalCount);
+
+                let template = new THREE.Object3D();
+                let index = 0;
+
+                let positions = [];
+
                 array .forEach ( (axis1, index0) =>  {
-                    let mean1 = axis1.length / 2;
                     axis1 .forEach ( (axis2, index1) => {
-                        let mean2 = axis2.length / 2;
                         axis2 .forEach ( (value, index2) => {
-                            let material = new THREE.MeshStandardMaterial({
-                                // color: 0xff0000,
-                                color: 'rgb(168, 168, 168)',
-                                metalness: 0,
-                                roughness: 0,
-                                envMap: cubeTexture,
-                                envMapIntensity: 1,
-                                opacity: value,
-                                transparent: true
-                            });
+                            template.position.set(k*index0 + k*0.5 - mean0,
+                                                  k*index1 + k*0.5 - mean1,
+                                                  k*index2 + k*0.5 - mean2);
 
-                            let k = 1;
-                            let geometry = new THREE.BoxBufferGeometry(k, k, k);
-                            geometry.translate(index0 + 0.5 - mean0, index1 + 0.5 - mean1, index2 + 0.5 - mean2);
-                            let mesh = new THREE.Mesh(geometry, material);
+                            template.updateMatrix();
 
-                            group.push([mesh, new THREE.Vector3(index0, index1, index2)]);
+                            mesh.setMatrixAt(index, template.matrix);
+                            index += 1;
 
-                            scene.add(mesh);
+                            // positions.push(new THREE.Vector3(k*index0 + k*0.5 - mean0, k*index1 + k*0.5 - mean1, k*index2 + k*0.5 - mean2))
                         } )
                     } )
                 } );
 
+                geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(new Float32Array(instanceColors), 4));
+
+                material.onBeforeCompile = function ( shader ) {
+
+                    shader.vertexShader = shader.vertexShader
+                        .replace('#include <common>', `
+                                    attribute vec4 instanceColor;
+                                    varying vec4 vInstanceColor;
+                                    #include <common>`)
+                        .replace('#include <begin_vertex>', `
+                                    #include <begin_vertex>
+                                    vInstanceColor = instanceColor;`);
+
+                    shader.fragmentShader = shader.fragmentShader
+                        .replace('#include <common>', `
+                                    varying vec4 vInstanceColor;
+                                    #include <common>`)
+                        .replace('vec4 diffuseColor = vec4( diffuse, opacity );', `
+                                    vec4 diffuseColor = vec4( diffuse * vInstanceColor.xyz, vInstanceColor.w );`);
+
+                    // console.log( shader.uniforms );
+                    // console.log( shader.vertexShader );
+                    // console.log( shader.fragmentShader );
+
+                };
+
+                scene.add(mesh);
+
                 renderer.render(scene, camera);
+                console.log('a.', performance.now() - t0)
             });
 
-            camera = new THREE.PerspectiveCamera( 70, domElement.clientWidth / domElement.clientHeight, 1, 10000 );
-            camera.position.z = 10;
+            camera = new THREE.PerspectiveCamera(70, domElement.clientWidth / domElement.clientHeight, 1, 10000);
+            camera.position.x = 120;
+            camera.position.y = 120;
+            camera.position.z = 120;
 
             let controls = new OrbitControls(camera, renderer.domElement);
-            controls.minDistance = 8;
-            controls.maxDistance = 20;
-            // controls.maxPolarAngle = Math.PI;
+            controls.minDistance = 80;
+            controls.maxDistance = 340;
 
             domElement.addEventListener('resize', onWindowResize, false);
         }
@@ -261,6 +322,7 @@ class ArrayPlot3D extends React.Component {
             // Couldn't figure out a depth setting to automatically set
             // the render order as back-to-front from any direction.
             // This will work for now.
+            // No longer works with instanced mesh.
             if (!camera.position.equals(previousCameraPosition) && Math.random() < 1 / 2) {
                 previousCameraPosition.copy(camera.position);
                 group .forEach ( ([child, position]) => { child.renderOrder = -camera.position.distanceTo(position) } );
@@ -271,7 +333,7 @@ class ArrayPlot3D extends React.Component {
     }
 
     render() {
-        return <div id={this.domId} style={{background: 'red', width: 100, height: 100}}></div>
+        return <div id={this.domId} style={{background: 'red', width: 340, height: 340}}></div>
     }
 }
 

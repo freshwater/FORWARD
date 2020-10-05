@@ -233,6 +233,11 @@ class Environment3:
         plt.savefig(filename2, dpi=300)
 
         return [fwd.Image(self.frame, elements=regions, display_scale=2),
+
+                fwd.ArrayPlot3D(np.random.rand(5, 5, 5)),
+                fwd.ArrayPlot3D(np.random.rand(40, 25, 15)),
+                fwd.ArrayPlot3D(np.random.rand(15, 15, 15)),
+
                 fwd.Image(output_array, display_scale=12),
 
                 {"R": fwd.Image(self.frame[::2,::2,0], color_map='Grayscale'),
@@ -242,7 +247,6 @@ class Environment3:
                 fwd.Image(self.actions_all),
                 fwd.FileImage(file=filename1),
                 fwd.FileImage(file=filename2),
-                fwd.ArrayPlot3D(np.random.rand(5, 5, 5)),
 
                 fwd.Array(output),
 
