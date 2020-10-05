@@ -169,13 +169,17 @@ class ArrayPlot3D extends React.Component {
     }
 
     componentDidMount() {
+        let {Value: array, Shape: shape} = this.props.data;
+        let totalCount = shape[0] * shape[1] * shape[2];
+
         let camera, scene, renderer, cubeCamera;
-        let group = [];
+        let mesh = null;
+        let positionsIndices = [];
+        let instanceColorsOriginal = new Float32Array(4*totalCount);
+        let instanceColors = new Float32Array(4*totalCount);
         let previousCameraPosition = new THREE.Vector3(0, 0, 0);
 
         let domElement = document.getElementById(this.domId);
-
-        let {Value: array, Shape: shape} = this.props.data;
 
         initialize(array);
         animate();
@@ -219,7 +223,7 @@ class ArrayPlot3D extends React.Component {
                 let t0 = performance.now()
 
                 let material = new THREE.MeshStandardMaterial({
-                    color: 'rgb(168, 168, 168)',
+                    color: 0xffffff,
                     metalness: 0,
                     roughness: 0,
                     envMap: cubeTexture,
@@ -227,26 +231,14 @@ class ArrayPlot3D extends React.Component {
                     transparent: true,
                 });
 
-                var instanceColors = [];
-
-                let totalCount = shape[0] * shape[1] * shape[2];
-
-                for (var i = 0; i < totalCount; i++) {
-                    instanceColors.push(Math.random());
-                    instanceColors.push(Math.random());
-                    instanceColors.push(Math.random());
-                    instanceColors.push(Math.random());
-                }
-
                 let k = scale / max;
                 let geometry = new THREE.BoxBufferGeometry(k, k, k);
 
-                let mesh = new THREE.InstancedMesh(geometry, material, totalCount);
+                mesh = new THREE.InstancedMesh(geometry, material, totalCount);
+                mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
                 let template = new THREE.Object3D();
                 let index = 0;
-
-                let positions = [];
 
                 array .forEach ( (axis1, index0) =>  {
                     axis1 .forEach ( (axis2, index1) => {
@@ -258,37 +250,39 @@ class ArrayPlot3D extends React.Component {
                             template.updateMatrix();
 
                             mesh.setMatrixAt(index, template.matrix);
-                            index += 1;
 
-                            // positions.push(new THREE.Vector3(k*index0 + k*0.5 - mean0, k*index1 + k*0.5 - mean1, k*index2 + k*0.5 - mean2))
+                            positionsIndices.push([
+                                /* position */ new THREE.Vector3(k*index0 + k*0.5 - mean0, k*index1 + k*0.5 - mean1, k*index2 + k*0.5 - mean2),
+                                /* indexOriginal */ index
+                            ])
+
+                            instanceColorsOriginal[4*index + 0] = 0.6;
+                            instanceColorsOriginal[4*index + 1] = 0.6;
+                            instanceColorsOriginal[4*index + 2] = 0.6;
+                            instanceColorsOriginal[4*index + 3] = value;
+
+                            index += 1;
                         } )
                     } )
                 } );
 
-                geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(new Float32Array(instanceColors), 4));
+                geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(new Float32Array(instanceColorsOriginal), 4));
 
                 material.onBeforeCompile = function ( shader ) {
-
                     shader.vertexShader = shader.vertexShader
-                        .replace('#include <common>', `
-                                    attribute vec4 instanceColor;
-                                    varying vec4 vInstanceColor;
-                                    #include <common>`)
-                        .replace('#include <begin_vertex>', `
-                                    #include <begin_vertex>
-                                    vInstanceColor = instanceColor;`);
+                        .replace('#include <common>', `attribute vec4 instanceColor;
+                                                       varying vec4 vInstanceColor;
+                                                       #include <common>`)
+
+                        .replace('#include <begin_vertex>', `#include <begin_vertex>
+                                                             vInstanceColor = instanceColor;`);
 
                     shader.fragmentShader = shader.fragmentShader
-                        .replace('#include <common>', `
-                                    varying vec4 vInstanceColor;
-                                    #include <common>`)
-                        .replace('vec4 diffuseColor = vec4( diffuse, opacity );', `
-                                    vec4 diffuseColor = vec4( diffuse * vInstanceColor.xyz, vInstanceColor.w );`);
+                        .replace('#include <common>', `varying vec4 vInstanceColor;
+                                                       #include <common>`)
 
-                    // console.log( shader.uniforms );
-                    // console.log( shader.vertexShader );
-                    // console.log( shader.fragmentShader );
-
+                        .replace('vec4 diffuseColor = vec4( diffuse, opacity );',
+                                    `vec4 diffuseColor = vec4( diffuse * vInstanceColor.xyz, vInstanceColor.w );`);
                 };
 
                 scene.add(mesh);
@@ -319,16 +313,43 @@ class ArrayPlot3D extends React.Component {
         function animate() {
             requestAnimationFrame(animate);
 
-            // Couldn't figure out a depth setting to automatically set
-            // the render order as back-to-front from any direction.
-            // This will work for now.
-            // No longer works with instanced mesh.
-            if (!camera.position.equals(previousCameraPosition) && Math.random() < 1 / 2) {
-                previousCameraPosition.copy(camera.position);
-                group .forEach ( ([child, position]) => { child.renderOrder = -camera.position.distanceTo(position) } );
+            if (mesh === null) {
+                return ;
             }
 
-            renderer.render(scene, camera);
+            // Couldn't figure out a depth/blend setting to automatically set
+            // the render order as back-to-front from any direction.
+            // This will work for now.
+            if (!camera.position.equals(previousCameraPosition) && Math.random() < 1) {
+                previousCameraPosition.copy(camera.position);
+
+                let template = new THREE.Object3D();
+
+                positionsIndices.sort(([a], [b]) => {
+                    return camera.position.distanceTo(a) <= camera.position.distanceTo(b) ? 1 : -1;
+                });
+
+                let index = 0;
+                for (let [position, indexOriginal] of positionsIndices) {
+                    template.position.copy(position);
+
+                    template.updateMatrix();
+
+                    mesh.setMatrixAt(index, template.matrix);
+
+                    instanceColors[4*index + 0] = instanceColorsOriginal[4*indexOriginal + 0];
+                    instanceColors[4*index + 1] = instanceColorsOriginal[4*indexOriginal + 1];
+                    instanceColors[4*index + 2] = instanceColorsOriginal[4*indexOriginal + 2];
+                    instanceColors[4*index + 3] = instanceColorsOriginal[4*indexOriginal + 3];
+
+                    index += 1;
+                }
+
+                mesh.instanceMatrix.needsUpdate = true;
+                mesh.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(instanceColors, 4));
+
+                renderer.render(scene, camera);
+            }
         }
     }
 
