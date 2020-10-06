@@ -213,21 +213,40 @@ class Image(Element):
             return self.json_cached
 
 class ArrayPlot3D(Element):
-    def __init__(self, array):
+    def __init__(self, array, _sequence_hacks_much_spooky_do_not_use=False):
         array = np.array(array)
+
+        self._sequence_hacks_much_spooky_do_not_use = _sequence_hacks_much_spooky_do_not_use
 
         if np.max(array) == np.min(array):
             array.fill(1)
+            rescaled = array
         else:
             rescaled = (array - np.min(array)) / (np.max(array) - np.min(array))
 
         self.array = rescaled.tolist()
         self.shape = rescaled.shape
 
+        if _sequence_hacks_much_spooky_do_not_use == "secr3tcode":
+            self.value_references = [str(hash(slice_.data.tobytes())) for slice_ in rescaled]
+
+        # import base64
+        # self.encoded = base64.b64encode(rescaled.astype(np.float16).data).decode()
+
     def json(self):
-        return {"Type": "ArrayPlot3D",
-                "Value": self.array,
-                "Shape": self.shape}
+        import json
+
+        if self._sequence_hacks_much_spooky_do_not_use != "secr3tcode":
+            return {"Type": "ArrayPlot3D",
+                    "Value": self.array,
+                    "Shape": self.shape}
+        else:
+            return {"Type": "ArrayPlot3D",
+                    "ValueReferences": self.value_references,
+                    "ValueReferencesInsert": {
+                        self.value_references[-1]: self.array[-1]
+                    },
+                    "Shape": self.shape}
 
 
 class Region(Element):

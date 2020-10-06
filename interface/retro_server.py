@@ -47,6 +47,9 @@ class Environment3:
         self.frame = self.environment.reset()
         self.blocks_identify(self.frame)
         self.frame_index = 0
+        self.frame_history = []
+        self.frame_previous = None
+        self.frame_deltas_history = []
 
         self.actions_all = []
         self.commitment_intervals_all = []
@@ -242,7 +245,7 @@ class Environment3:
 
             return arr
 
-        arr = np.stack([ring(width=121, radius=r/2) for r in range(30, 60, 2)])
+        # arr = np.stack([ring(width=121, radius=r/2) for r in range(30, 60, 2)])
 
         frame = self.frame
         padded = 255*np.ones((frame.shape[0], frame.shape[1], frame.shape[2]+1))
@@ -251,18 +254,27 @@ class Environment3:
 
         colors, counts = np.unique(frame.reshape(-1, 4), axis=0, return_counts=True)
         background = colors[counts.argmax()]
-        mask = frame.reshape(-1, 4).dot(background) == background.dot(background)
+        mask = (1 + frame.reshape(-1, 4)).dot(1 + background) == (1 + background).dot(1 + background)
         frame.reshape(-1, 4)[mask] = [0, 0, 0, 0]
 
-        return [fwd.Image(self.frame, elements=regions, display_scale=2),
+        self.frame_history.append(frame[::2, ::2])
 
-                fwd.ArrayPlot3D(np.random.rand(5, 5, 5)),
-                # fwd.ArrayPlot3D([self.frame]),
-                fwd.ArrayPlot3D([frame]),
-                fwd.ArrayPlot3D(np.random.rand(40, 25, 15)),
-                fwd.ArrayPlot3D(np.random.rand(140, 155, 15)),
-                fwd.ArrayPlot3D(np.random.rand(15, 15, 15)),
-                fwd.ArrayPlot3D(arr),
+        if self.frame_previous is not None:
+
+            mask = ((1 + frame.reshape(-1, 4)).dot(np.array([1, 2, 4, 8])) ==
+                    (1 + self.frame_previous.reshape(-1, 4)).dot(np.array([1, 2, 4, 8])))
+
+            frame_x = frame.copy()
+            frame_x.reshape(-1, 4)[mask] = [0, 0, 0, 0]
+            frame_x.reshape(-1, 4)[~mask] = [0.5, 0.5, 0.5, 1]
+
+            self.frame_deltas_history.append(frame_x[::3, ::3])
+
+        self.frame_previous = frame
+        empty = np.ones(frame[::3, ::3].shape)
+        empty[::,::,3] = 0
+
+        return [fwd.Image(self.frame, elements=regions, display_scale=2),
 
                 fwd.Image(output_array, display_scale=12),
 
@@ -270,9 +282,13 @@ class Environment3:
                  "G": fwd.Image(self.frame[::2,::2,1], color_map='Grayscale'),
                  "B": fwd.Image(self.frame[::2,::2,2], color_map='Grayscale')},
 
+                fwd.ArrayPlot3D(self.frame_history, _sequence_hacks_much_spooky_do_not_use="secr3tcode"),
+
                 fwd.Image(self.actions_all),
                 fwd.FileImage(file=filename1),
                 fwd.FileImage(file=filename2),
+
+                fwd.ArrayPlot3D(self.frame_deltas_history or [empty], _sequence_hacks_much_spooky_do_not_use="secr3tcode"),
 
                 fwd.Array(output),
 
