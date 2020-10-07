@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 
+import time
+
 import uuid
 
 
@@ -224,14 +226,20 @@ class ArrayPlot3D(Element):
         else:
             rescaled = (array - np.min(array)) / (np.max(array) - np.min(array))
 
-        self.array = rescaled.tolist()
+        rescaled = (255*rescaled).astype(np.uint8)
         self.shape = rescaled.shape
 
         if _sequence_hacks_much_spooky_do_not_use == "secr3tcode":
             self.value_references = [str(hash(slice_.data.tobytes())) for slice_ in rescaled]
 
-        # import base64
-        # self.encoded = base64.b64encode(rescaled.astype(np.float16).data).decode()
+            import base64
+            self.array = None
+            self.encoded = base64.b64encode(rescaled[-1].data).decode()
+        else:
+            self.array = rescaled.tolist()
+            self.encoded = None
+
+
 
     def json(self):
         import json
@@ -243,8 +251,8 @@ class ArrayPlot3D(Element):
         else:
             return {"Type": "ArrayPlot3D",
                     "ValueReferences": self.value_references,
-                    "ValueReferencesInsert": {
-                        self.value_references[-1]: self.array[-1]
+                    "ValueReferencesEncodedInsert": {
+                        self.value_references[-1]: self.encoded
                     },
                     "Shape": self.shape}
 

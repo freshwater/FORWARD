@@ -366,10 +366,23 @@ class ArrayPlot3D extends React.Component {
         let {Value: array, Shape: shape} = this.props.data;
         let totalCount = shape[0] * shape[1] * shape[2];
 
-        let {ValueReferences: references, ValueReferencesInsert: inserts} = this.props.data;
+        let {ValueReferences: references, ValueReferencesEncodedInsert: inserts} = this.props.data;
+
         if (references) {
             for (let reference in inserts) {
-                this.valueReferences[reference] = inserts[reference];
+                // Base64 decode
+                let binary = atob(inserts[reference]);
+
+                // Probably better to just flatten the index on each drawing pass rather than reshape here.
+                // The implementation complexity of this is low so keeping for now.
+                let index = 0;
+                let array = [...new Uint8Array(shape[1])] .map (() =>
+                                [...new Uint8Array(shape[2])].map(() =>
+                                    [...new Uint8Array(shape[3])].map(() => binary.charCodeAt(index++) / 255.0)
+                                )
+                            );
+
+                this.valueReferences[reference] = array;
             }
 
             array = references .map ((reference) => this.valueReferences[reference]);
