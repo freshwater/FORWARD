@@ -3,19 +3,6 @@
 
 let clientId = new String(Math.random()).substring(2);
 
-// document.body.style.background = 'black';
-
-class GameSelection extends React.Component {
-    render() {
-        return <select defaultValue={this.props.selectedGame}
-                        onChange={(event) => {reset(event.target.value)}}> {
-                this.props.gamesList .map (
-                    (gameTitle) => <option value={gameTitle} key={gameTitle}>{gameTitle}</option>
-                ) }
-        </select>;
-    }
-}
-
 class DownloadsSelection extends React.Component {
     render() {
         return <select id={this.props.id} defaultValue={this.props.initialValue}
@@ -27,26 +14,12 @@ class DownloadsSelection extends React.Component {
     }
 }
 
-function query(request, process) {
-    fetch('.', {
-        method: 'POST',
-        body: JSON.stringify(request)
-    })
-    .then(function(response) { return response.json(); })
-    .then(process);
-}
-
-query({'Request': 'AvailableGames', 'ClientId': clientId}, function(response) {
-    let games = response['AvailableGames'];
-    ReactDOM.render(<GameSelection gamesList={games} selectedGame={"SuperMarioBros-Nes"}/>, document.querySelector('.title'));
-});
-
-let downloadId = new String(Math.random()).substring(2);
+/*let downloadId = new String(Math.random()).substring(2);
 ReactDOM.render([<DownloadsSelection id={downloadId} values={[".mp4 Replay Video", ".bk2 Replay Data", ".json Action Sequence"]}
                                         initialValue=".mp4 Replay Video" />,
                     <span>&nbsp;</span>,
                     <button onClick={(event) => download(document.getElementById(downloadId).value, event)}>Download</button>],
-                document.querySelector('.downloads-selection'));
+                document.querySelector('.downloads-selection'));*/
 
 class DataDisplay extends React.Component {
     render() {
@@ -54,13 +27,14 @@ class DataDisplay extends React.Component {
 
         if (type === "List") {
             return <div className="list">
-                {value .map ((element, index) => <DataDisplay data={element} index={index} />)}
+                {value .map ((element, index) => <DataDisplay data={element} key={index} index={index} />)}
             </div>;
 
         } else if (type === "Dictionary") {
             return <table className="dictionary">
                 <tbody>
-                    {value .map (([key1, value1]) => <tr>
+                    { /* Keys and values can be arbitrary structures. For now just use index as UI key. */}
+                    {value .map (([key1, value1], index) => <tr key={index}>
                         <td className="key"><DataDisplay data={key1} /></td>
                         <td className="value"><DataDisplay data={value1} /></td>
                     </tr>)}
@@ -130,7 +104,6 @@ class DataDisplay extends React.Component {
             let { Id: id } = object;
 
             let onClick = function () {
-                let t0 = performance.now();
                 query({
                     "Request": "Event",
                     "ClientId": clientId,
@@ -139,24 +112,94 @@ class DataDisplay extends React.Component {
                 }, function (response) {
                     // console.log("r.", performance.now() - t0);
                     setDisplay(response['Data']);
-                })
+                });
             };
 
-            /*let buttonIds = value .flatMap (({Type: type, Id: id}) => type === 'Button' ? [id] : [])
-
-            setTimeout(function() {
-                let buttons = buttonIds .map ((id) => document.getElementById(id));
-                let maxWidth = Math.max(...[...buttons].map(button => button.clientWidth));
-                let maxHeight = Math.max(...[...buttons].map(button => button.clientHeight));
-                [...buttons].forEach(button => button.style.width = `${maxWidth}px`);
-                [...buttons].forEach(button => button.style.height = `${maxHeight + 5}px`);
-            }, 10)*/
-
             return <button id={id} key={id} className="button" onClick={onClick}>{value}</button>
+
+        } else if (type === "SelectionList") {
+            return <SelectionList data={this.props.data} />;
+
+        } else if (type === "CheckList") {
+            return <CheckList data={this.props.data} />;
+
+        } else if (type === "NumberInput") {
+            let {Label: label, Id: id, Minimum: min, Maximum: max, Value: value} = this.props.data;
+            let onChange = function (event) {
+                let newValue = event.target.value;
+                // event.target.blur();
+                query({
+                    "Request": "Event",
+                    "ClientId": clientId,
+                    "Type": "NumberInput_OnChange",
+                    "Value": newValue,
+                    "Id": id
+                }, function (response) {
+                    setDisplay(response['Data']);
+                });
+            };
+
+            return <span style={{display: 'flex', flexDirection: 'row'}}>
+                <input type="number" min={min} max={max} value={value}
+                    onChange={onChange}></input>
+                </span>;
 
         } else {
             return <div></div>;
         }
+    }
+}
+
+class SelectionList extends React.Component {
+    render() {
+        let {Value: options, SelectedValue: selectedOption, Id: id, IsEnabled: enabled} = this.props.data;
+
+        let onChange = function (event) {
+            query({
+                "Request": "Event",
+                "ClientId": clientId,
+                "Type": "SelectionList_OnChange",
+                "Value": event.target.value,
+                "Id": id
+            }, function (response) {
+                setDisplay(response['Data']);
+            });
+        };
+
+        return <select defaultValue={selectedOption} onChange={onChange} disabled={!enabled}> {
+                options .map ((value) => <option value={value} key={value}>{value}</option>)
+        } </select>;
+    }
+}
+
+class CheckList extends React.Component {
+    render() {
+        let {Value: options, SelectedValue: selectedOptions, Id: id} = this.props.data;
+
+        let onChange = function (event) {
+            let key = event.target.value;
+            let newValue = !selectedOptions.includes(key);
+
+            query({
+                "Request": "Event",
+                "ClientId": clientId,
+                "Type": "CheckList_OnChange",
+                "Key": key,
+                "Value": newValue,
+                "Id": id
+            }, function (response) {
+                setDisplay(response['Data']);
+            });
+        };
+
+        return <div> {
+            options .map ((option) => <span key={option}>
+                <input type="checkbox" id={option} name={option} value={option}
+                       checked={selectedOptions.includes(option)}
+                       onChange={onChange} />
+                <label htmlFor={option}>{option}</label>
+            </span>)
+        } </div>;
     }
 }
 
@@ -378,7 +421,7 @@ class ArrayPlot3D extends React.Component {
                 let index = 0;
                 let array = [...new Uint8Array(shape[1])] .map (() =>
                                 [...new Uint8Array(shape[2])].map(() =>
-                                    [...new Uint8Array(shape[3])].map(() => binary.charCodeAt(index++) / 255.0)
+                                    [...new Uint8Array(shape[3])].map(() => binary.charCodeAt(index++))
                                 )
                             );
 
@@ -429,17 +472,17 @@ class ArrayPlot3D extends React.Component {
                         this.instanceColorsOriginal[4*index + 0] = 0.55;
                         this.instanceColorsOriginal[4*index + 1] = 0.55;
                         this.instanceColorsOriginal[4*index + 2] = 0.55;
-                        this.instanceColorsOriginal[4*index + 3] = value;
+                        this.instanceColorsOriginal[4*index + 3] = value / 255.0;
                     } else if (format === 3) {
-                        this.instanceColorsOriginal[4*index + 0] = value[0];
-                        this.instanceColorsOriginal[4*index + 1] = value[1];
-                        this.instanceColorsOriginal[4*index + 2] = value[2];
+                        this.instanceColorsOriginal[4*index + 0] = value[0] / 255.0;
+                        this.instanceColorsOriginal[4*index + 1] = value[1] / 255.0;
+                        this.instanceColorsOriginal[4*index + 2] = value[2] / 255.0;
                         this.instanceColorsOriginal[4*index + 3] = 0.8;
                     } else if (format === 4) {
-                        this.instanceColorsOriginal[4*index + 0] = value[0];
-                        this.instanceColorsOriginal[4*index + 1] = value[1];
-                        this.instanceColorsOriginal[4*index + 2] = value[2];
-                        this.instanceColorsOriginal[4*index + 3] = value[3];
+                        this.instanceColorsOriginal[4*index + 0] = value[0] / 255.0;
+                        this.instanceColorsOriginal[4*index + 1] = value[1] / 255.0;
+                        this.instanceColorsOriginal[4*index + 2] = value[2] / 255.0;
+                        this.instanceColorsOriginal[4*index + 3] = value[3] / 255.0;
                     }
 
                     index += 1;
@@ -478,7 +521,22 @@ function clipboardCopy(text, event) {
 }
 
 function setDisplay(data) {
-    let dataDisplay = ReactDOM.render(<DataDisplay data={data}/>, document.getElementById('data-display-container'));
+    [...data['Value']] .forEach ((element) => {
+        if (element['Type'] === 'ApplicationSettings') {
+            for (let setting in element['Value']) {
+                if (setting === 'Title') {
+                    document.title = element['Value'][setting];
+                } else if (setting === 'Thumbnail') {
+                    let link = document.querySelector('head link');
+                    link.setAttribute('href', element['Value'][setting]['Value']);
+                } else if (setting === 'Background') {
+                    document.body.style.background = element['Value'][setting];
+                }
+            }
+        }
+    });
+
+    ReactDOM.render(<DataDisplay data={data}/>, document.getElementById('data-display-container'));
 }
 
 var currentFrameIndex = 0;
@@ -517,38 +575,22 @@ function download(resourceType, event) {
     });
 }
 
-ReactDOM.render(<button onClick={() => reset()} className="reset-button">RESET</button>,
-                document.querySelector('.reset-button-container'));
-
-let lastSelectedGame = null;
-function reset(game=lastSelectedGame) {
-    lastSelectedGame = game;
-    document.title = game;
-
+function initialize() {
     query({
-        "Request": "Reset",
-        "Game": game,
+        "Request": "Initial",
         "ClientId": clientId
-    }, function(response) {
-        let {Observation: obs,
-                BlockEncodings: encodings,
-                Blocks: blocks,
-                FrameIndex: frameIndex} = response;
-
-        currentFrameIndex = frameIndex;
-
-        query({
-            "Request": "ImageUrl",
-            "ClientId": clientId
-        }, function(faviconUrl) {
-            let link = document.querySelector('head link');
-            link.setAttribute('href', faviconUrl);
-        });
-
-        /* */
-        let {Data: data} = response;
+    }, ({Data: data}) => {
         setDisplay(data);
     });
 }
 
-reset("SuperMarioBros-Nes");
+function query(request, process) {
+    fetch('.', {
+        method: 'POST',
+        body: JSON.stringify(request)
+    })
+    .then((response) => response.json())
+    .then(process);
+}
+
+initialize();

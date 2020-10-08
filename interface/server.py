@@ -10,71 +10,39 @@ import uuid
 import os
 import matplotlib.pyplot as plt
 
+import time
+
 import forward
 import retro_server
 
 
 class Server(http.server.BaseHTTPRequestHandler):
-    # with open('static/index.html') as file:
-    #     html_index_file = file.read()
+    modules = {}
 
     files_cache = {}
-    environments = {}
-    forward_states = {}
-
-    games_list = sorted([
-        "SuperMarioBros-Nes",
-        "DonkeyKong-Nes",
-        "SectionZ-Nes",
-        "BubbleBobble-Nes",
-        "NinjaGaiden-Nes",
-        "Gradius-Nes",
-        "ThunderAndLightning-Nes",
-        "SuperC-Nes",
-        "Spelunker-Nes"
-    ])
-
-    ## import time
-    ## t0 = time.time()
-    ## games_list = []
-    ## for game in retro.data.list_games():
-    ##     try:
-    ##         if 'Nes' in game:
-    ##             retro.make(game).close()
-    ##             games_list.append(game)
-    ##     except RuntimeError:
-    ##         pass
-    ## print()
-    ## print(f'Game check time {time.time() - t0:0.2f}s')
-
-    actions_map = {
-        'UP':        [0, 0, 0, 0, 1, 0, 0, 0, 0],
-        'DOWN':      [0, 0, 0, 0, 0, 1, 0, 0, 0],
-        'LEFT':      [0, 0, 0, 0, 0, 0, 1, 0, 0],
-        'RIGHT':     [0, 0, 0, 0, 0, 0, 0, 1, 0],
-        'NONE':      [0, 0, 0, 0, 0, 0, 0, 0, 0],
-        'B':         [1, 0, 0, 0, 0, 0, 0, 0, 0],
-        'A':         [0, 0, 0, 0, 0, 0, 0, 0, 1],
-    };
 
     def request_process(self, request):
         request_name = request["Request"]
         client_id = request["ClientId"]
 
-        if request_name == "AvailableGames":
-            return {
-                "AvailableGames": Server.games_list
-            }
+        import retro_module
 
-        elif request_name == "ImageUrl":
-            image_files_folder = Server.environments[client_id].image_files_folder()
-            file_name = f"{image_files_folder}/{uuid.uuid4()}.png"
-            frame, _encodings, _blocks, _frame_index = Server.environments[client_id].interface_render()
-            plt.imsave("/tmp/" + file_name, np.array(frame).astype(np.uint8))
+        if request_name == "Initial":
+            Server.modules[client_id] = retro_module.RetroModule2()
+        elif request_name == "Event":
+            Server.modules[client_id].event_process(request)
+        else:
+            return
 
-            return file_name
+        return {
+            'Data': Server.modules[client_id].interface_json()
+        }
 
-        elif request_name == "ResourceURL":
+    def request_process0(self, request):
+        request_name = request["Request"]
+        client_id = request["ClientId"]
+
+        if request_name == "ResourceURL":
             client_id = request['ClientId']
             game = request['Game']
 
@@ -133,54 +101,6 @@ class Server(http.server.BaseHTTPRequestHandler):
 
                 return f'/{random_key}/video.mp4'
 
-        elif request_name == "Event":
-            states = self.forward_states.get(client_id) # or forward.State()
-            for state in reversed(states):
-                if state.event_process(request):
-                    break
-
-            data = Server.environments[client_id].interface_render2()
-            data = data[:1] + [[
-                (lambda action: forward.Button(label=action, on_click=lambda: Server.environments[client_id].step(Server.actions_map[action], 6)))(action)
-                for action in Server.actions_map.keys()
-            ]] + data[1:]
-
-            data_element = forward.Element.to_element(data)
-            self.forward_states[client_id].append(data_element)
-
-            if len(self.forward_states[client_id]) > 30:
-                self.forward_states[client_id].pop(0)
-
-            return {
-                'Data': data_element.json()
-            }
-
-        elif request_name == "Reset":
-            game = request["Game"]
-
-            if environment := Server.environments.get(client_id):
-                environment.close()
-
-            Server.environments[client_id] = retro_server.RetroClient(game=game)
-            frame, encodings, blocks, frame_index = Server.environments[client_id].interface_render()
-
-            data = Server.environments[client_id].interface_render2()
-            data = data[:1] + [[
-                (lambda action: forward.Button(label=action, on_click=lambda: Server.environments[client_id].step(Server.actions_map[action], 6)))(action)
-                for action in Server.actions_map.keys()
-            ]] + data[1:]
-
-            data_element = forward.Element.to_element(data)
-            self.forward_states[client_id] = [data_element]
-
-            return {
-                'Observation': frame,
-                'BlockEncodings': encodings,
-                'Blocks': blocks,
-                'FrameIndex': frame_index,
-                'Data': data_element.json()
-            }
-
         raise NotImplementedError(request)
 
 
@@ -196,7 +116,10 @@ class Server(http.server.BaseHTTPRequestHandler):
         print("Request")
         print(json.dumps(request).encode()[:800])
 
+        import time
+        t0 = time.time()
         response = self.request_process(request)
+        # print(f"{len(json.dumps(response))}_____request_____{time.time() - t0}")
 
         self.wfile.write(json.dumps(response).encode())
 

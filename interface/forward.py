@@ -4,9 +4,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 
-import time
-
 import uuid
+
+class Module:
+    def __init__(self):
+        self.interfaces = []
+
+    def event_process(self, event):
+        for element in reversed(self.interfaces):
+            element.event_process(event)
+
+    def interface_json(self):
+        # Each interface call can produce completely new objects.
+        interface_raw = self.interface()
+        interface_typed = Element.to_element(interface_raw)
+
+        # Keep older event handlers in case the user interacts multiple
+        # times with the same frame before getting a new frame.
+        self.interfaces.append(interface_typed)
+        if len(self.interfaces) > 20:
+            self.interfaces.pop(0)
+
+        return interface_typed.json()
 
 
 class Element:
@@ -19,7 +38,7 @@ class Element:
             return String(object)
         elif isinstance(object, numbers.Number):
             return Number(object)
-        elif isinstance(object, list):
+        elif isinstance(object, (list, tuple)):
             return List(object)
         elif isinstance(object, dict):
             return Dictionary(object)
@@ -42,6 +61,9 @@ class Element:
                     return True
                 elif value1.event_process(event):
                     return True
+
+    def rasterize(self):
+        return self
 
 
 class String(Element):
@@ -87,6 +109,20 @@ class Array(Element):
         return {"Type": "Array2D",
                 "Value": self.data}
 
+class ApplicationSettings(Element):
+    def __init__(self, settings):
+        self.settings = settings
+
+        for key, value in settings.items():
+            if key == 'Thumbnail':
+                self.settings[key] = Element.to_element(value).rasterize().json()
+
+    def json(self):
+        return {
+            "Type": "ApplicationSettings",
+            "Value": self.settings
+        }
+
 class Button(Element):
     def __init__(self, label, on_click, enabled=True):
         self.label = label
@@ -109,9 +145,55 @@ class Button(Element):
 
             return True
 
+class SelectionList(Element):
+    def __init__(self, options, selected_option, on_change, is_enabled=True):
+        self.options = options
+        self.selected_option = selected_option
+        self.on_change = on_change
+        self.is_enabled = is_enabled
+
+        self.id = str(uuid.uuid4())
+
+    def json(self):
+        return {
+            "Type": "SelectionList",
+            "Value": self.options,
+            "SelectedValue": self.selected_option,
+            "Id": self.id,
+            "IsEnabled": self.is_enabled
+        }
+
+    def event_process(self, event):
+        if event['Id'] == self.id:
+            self.on_change(event['Value'])
+
+            return True
+
+class CheckList(Element):
+    def __init__(self, options, selected_options, on_check):
+        self.options = options
+        self.selected_options = selected_options
+        self.on_check = on_check
+
+        self.id = str(uuid.uuid4())
+
+    def json(self):
+        return {
+            "Type": "CheckList",
+            "Value": self.options,
+            "SelectedValue": self.selected_options,
+            "Id": self.id
+        }
+
+    def event_process(self, event):
+        if event['Id'] == self.id:
+            self.on_check(event['Key'], event['Value'])
+
+            return True
+
 class NumberInput(Element):
-    def __init__(self, label, minimum, maximum, value, on_change):
-        self.label = label
+    def __init__(self, value, on_change, minimum=None, maximum=None):
+        # self.label = label
         self.minimum = minimum
         self.maximum = maximum
         self.value = value
@@ -124,9 +206,16 @@ class NumberInput(Element):
             "Type": "NumberInput",
             "Value": self.value,
             "Id": self.id,
-            "Minimum": minimum,
-            "Maximum": maximum
+            # "Label": self.label,
+            "Minimum": self.minimum,
+            "Maximum": self.maximum
         }
+
+    def event_process(self, event):
+        if event['Id'] == self.id:
+            self.on_change(int(event['Value']))
+
+            return True
 
 
 class FileImage(Element):
@@ -238,8 +327,6 @@ class ArrayPlot3D(Element):
         else:
             self.array = rescaled.tolist()
             self.encoded = None
-
-
 
     def json(self):
         import json

@@ -20,8 +20,8 @@ def block_partition(matrix, block_width):
     return matrix
 
 class Environment3:
-    def __init__(self, game, actions=[], bk2_location=None):
-        self.environment = retro.make(game=game, record=bk2_location)
+    def __init__(self, game, state, actions=[], bk2_location=None):
+        self.environment = retro.make(game=game, state=state, record=bk2_location)
 
         self.blocks_seen = []
         self.blocks_seen_urls = []
@@ -50,6 +50,8 @@ class Environment3:
         self.frame_history = []
         self.frame_previous = None
         self.frame_deltas_history = []
+
+        self.index_previous = -1
 
         self.actions_all = []
         self.commitment_intervals_all = []
@@ -151,7 +153,7 @@ class Environment3:
         return self.frame.tolist(), list(self.encodings_frame), self.blocks_seen_urls, self.frame_index
 
 
-    def interface_render2(self):
+    def interface_render2(self, show_encodings):
         import torch
         import torch.nn.functional as F
 
@@ -187,15 +189,16 @@ class Environment3:
         to_number = lambda x: (int(hashlib.sha1(x.encode()).hexdigest(), 16) % 100_000_000) / 100_000_000
 
         regions = []
-        seed = "6"
-        for i in range(output_array.shape[0]):
-            for j in range(output_array.shape[1]):
-                value = output_array[i][j].item()
-                r, g, b = (to_number(str(value) + seed + color) for color in ["Red", "Green", "Blue"])
-                regions.append(fwd.Region(geometry=[[j*16, (i+4)*16], [j*16 + 16, (i+4)*16 + 16]],
-                                          color=[r, g, b, 0.2],
-                                          label=output[i][j],
-                                          label_color=[1, 1, 0, 0.75]))
+        if show_encodings:
+            seed = "6"
+            for i in range(output_array.shape[0]):
+                for j in range(output_array.shape[1]):
+                    value = output_array[i][j].item()
+                    r, g, b = (to_number(str(value) + seed + color) for color in ["Red", "Green", "Blue"])
+                    regions.append(fwd.Region(geometry=[[j*16, (i+4)*16], [j*16 + 16, (i+4)*16 + 16]],
+                                            color=[r, g, b, 0.2],
+                                            label=output[i][j],
+                                            label_color=[1, 1, 0, 0.75]))
 
         frame_index_region = fwd.Region(geometry=[[width - 16, 0], [width, 8]],
                                         color=[0, 0, 0, 0],
@@ -257,7 +260,8 @@ class Environment3:
         mask = (1 + frame.reshape(-1, 4)).dot(1 + background) == (1 + background).dot(1 + background)
         frame.reshape(-1, 4)[mask] = [0, 0, 0, 0]
 
-        self.frame_history.append(frame[::2, ::2])
+        if self.frame_index != self.index_previous:
+            self.frame_history.append(frame[::2, ::2])
 
         if self.frame_previous is not None:
 
@@ -268,7 +272,11 @@ class Environment3:
             frame_x.reshape(-1, 4)[mask] = [0, 0, 0, 0]
             frame_x.reshape(-1, 4)[~mask] = [0.5, 0.5, 0.5, 1]
 
-            self.frame_deltas_history.append(frame_x[::3, ::3])
+            if self.frame_index != self.index_previous:
+                self.frame_deltas_history.append(frame_x[::3, ::3])
+
+        if self.frame_index != self.index_previous:
+            self.index_previous = self.frame_index
 
         self.frame_previous = frame
         empty = np.ones(frame[::3, ::3].shape)
@@ -299,14 +307,14 @@ class Environment3:
 
 
 class RetroClient:
-    def __init__(self, game, actions=[], bk2_location=None):
+    def __init__(self, game, state, actions=[], bk2_location=None):
         import multiprocessing as mp
 
         self.parent_connection, child_connection = mp.Pipe()
         process = mp.Process(target=RetroClient.dispatch, args=[child_connection])
         process.start()
 
-        self.parent_connection.send(['__init__', {'game': game, 'actions': actions, 'bk2_location': bk2_location}])
+        self.parent_connection.send(['__init__', {'game': game, 'state': state, 'actions': actions, 'bk2_location': bk2_location}])
         self.parent_connection.recv()
         self.parent_connection.send(['print', {}])
         self.parent_connection.recv()
@@ -340,8 +348,12 @@ class RetroClient:
         self.parent_connection.send(['interface_render', {}])
         return self.parent_connection.recv()
 
-    def interface_render2(self):
-        self.parent_connection.send(['interface_render2', {}])
+    def frame(self):
+        self.parent_connection.send(['[get_attribute]', {'attribute': 'frame'}])
+        return self.parent_connection.recv()
+
+    def interface_render2(self, show_encodings):
+        self.parent_connection.send(['interface_render2', {'show_encodings': show_encodings}])
         return self.parent_connection.recv()
 
     def close(self):
