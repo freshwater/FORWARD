@@ -160,3 +160,23 @@ class RetroModule1(Module):
             Button(label="RESET", on_click=self.reset)
         ]
 
+class CurvyThing(Module):
+
+    def interface(self):
+        zed = [np.random.randn(np.random.randint(10, 100), 6)**2 for index in range(60)]
+
+        return [
+            ApplicationSettings({'Background': 'Black'}),
+            # ApplicationParameters({'variable1': self.variable1_set}),
+            [Image(1 - z, color_map='Grayscale') for z in zed]
+        ]
+
+
+class Active(Module):
+
+    def interface(self):
+        import pickle
+        imagez = pickle.load(open('data/active.pickle', 'rb'))
+
+        return imagez
+

@@ -16,6 +16,12 @@
     flex-wrap: wrap;
 }
 
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 .container > .list > * {
     margin: 3px;
 }

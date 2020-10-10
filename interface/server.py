@@ -28,7 +28,9 @@ class Server(http.server.BaseHTTPRequestHandler):
         import retro_module
 
         if request_name == "Initial":
-            Server.modules[client_id] = retro_module.RetroModule2()
+            # Server.modules[client_id] = retro_module.RetroModule2()
+            # Server.modules[client_id] = retro_module.CurvyThing()
+            Server.modules[client_id] = retro_module.Active()
         elif request_name == "Event":
             Server.modules[client_id].event_process(request)
         else:
@@ -139,6 +141,28 @@ class Server(http.server.BaseHTTPRequestHandler):
 
         import os.path
         extension = os.path.splitext(self.path)[1]
+
+        # SinglePageSingleSession
+        #   a | b |
+        #   c | | d
+        ## SinglePageMultipleSession ?
+        ##   a | b |
+        ##   a | | b
+        ## MultiplePageSingleSession ?
+        ##   a | a |
+        ##   b | | b
+        # MultiplePageMultipleSession
+        #   a | a |
+        #   a | | a
+
+        # if user_state_preservation_mode == 'None':
+        #    pass
+        # elif user_state_preservation_mode == 'CrossPageSessionOnly':
+        #    pass
+        # elif user_state_preservation_mode == 'UserOnly':
+        #    pass
+        # elif user_state_preservation_mode == 'CrossPageSessionAndUser':
+        #    pass
 
         if self.path == '/':
             self.send_response(200)

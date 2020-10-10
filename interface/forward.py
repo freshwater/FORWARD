@@ -10,6 +10,19 @@ class Module:
     def __init__(self):
         self.interfaces = []
 
+    def user_state_preservation_mode(self):
+        return 'SinglePageSingleSession'
+
+    def application(self, path):
+        # path, parameters = path_deconstruct(path)
+        parameters = {}
+
+        if path == '/':
+            return self.interface(parameters)
+
+        elif path == '/b':
+            return self.interface2(parameters)
+
     def event_process(self, event):
         for element in reversed(self.interfaces):
             element.event_process(event)
@@ -342,6 +355,16 @@ class ArrayPlot3D(Element):
                         self.value_references[-1]: self.encoded
                     },
                     "Shape": self.shape}
+
+class Audio(Element):
+    def __init__(self, signal):
+        self.signal = signal
+
+    def json(self):
+        return {
+            "Type": "Audio",
+            "Value": self.signal
+        }
 
 
 class Region(Element):

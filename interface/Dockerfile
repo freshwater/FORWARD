@@ -32,11 +32,38 @@ RUN pip3 install scikit-learn
 RUN DEBIAN_FRONTEND=noninteractive apt-get install --yes ffmpeg
 
 
+## Spark
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get install --yes default-jdk \
+                                                         scala
+
+WORKDIR /downloads
+RUN apt-get install --yes curl
+
+RUN curl -LO https://archive.apache.org/dist/spark/spark-3.0.0/spark-3.0.0-bin-hadoop2.7.tgz
+RUN tar xvf spark-*
+RUN mv spark-3.0.0-bin-hadoop2.7 /opt/spark
+
+ENV SPARK_HOME=/opt/spark
+ENV PYSPARK_PYTHON=/usr/bin/python3
+ENV PATH="/opt/spark/bin:/opt/spark/sbin:${PATH}"
+
+ENV PYTHONPATH="${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-${py4j_version}-src.zip"
+# ENV SPARK_OPTS="--driver-java-options=-Xms1024M --driver-java-options=-Xmx4096M --driver-java-options=-Dlog4j.logLevel=info"
+
+RUN pip3 install pyspark
+
+
+## Jupyter
+
+RUN pip3 install jupyter
+
+
 ## JSX
 
 WORKDIR /server_directory
 
-RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
+# RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
 RUN apt-get install --yes nodejs \
                           npm
 
@@ -51,5 +78,7 @@ RUN python3 -m retro.import roms
 RUN npx babel --presets @babel/react application.js -o application.js
 RUN npx webpack application.js --mode=development --output application.js
 
+
+ENV JUPYTER_TOKEN=token
 
 WORKDIR /workfolder
