@@ -28,6 +28,11 @@ class Module:
         for element in reversed(self.interfaces):
             element.event_process(event)
 
+    def inspection_process(self, request):
+        for element in reversed(self.interfaces):
+            if result := element.inspection_process(request):
+                return result
+
     def interface_json(self):
         # Each interface call can produce completely new objects.
         interface_raw = self.interface()
@@ -75,6 +80,20 @@ class Element:
                     return True
                 elif value1.event_process(event):
                     return True
+
+    def inspection_process(self, request):
+        if isinstance(self, List):
+            for element in self.value:
+                if result := element.inspection_process(request):
+                    return result
+
+        elif isinstance(self, Dictionary):
+            for key, value1 in self.value:
+                if result := key.inspection_process(request):
+                    return result
+                elif result := value1.inspection_process(request):
+                    return result
+
 
     def rasterize(self):
         return self
@@ -278,6 +297,9 @@ class FileImage(Element):
 
 class Image(Element):
     def __init__(self, array, elements=[], display_scale=1, color_map=None):
+        self.raw_data = array
+        self.instance_id = str(uuid.uuid4())
+
         if isinstance(array, torch.Tensor):
             self.array = array.detach().cpu().numpy()
         elif isinstance(array, list):
@@ -296,6 +318,11 @@ class Image(Element):
         self.color_map = color_map
 
         self.count = 0
+
+    def inspection_process(self, request):
+        if request['InstanceId'] == self.instance_id:
+            return {"Type": "Inspection",
+                    "Value": self.raw_data.tolist()}
 
     def json(self):
         self.count += 1
@@ -319,12 +346,14 @@ class Image(Element):
             url_encoded = f"data:image/png;base64,{encoded}"
 
             self.json_cached = {"Type": "Image",
+                                "InstanceId": self.instance_id,
                                 "Value": url_encoded,
                                 "Shape": self.array.shape,
                                 "DisplayScale": self.display_scale,
                                 "Elements": [element.json() for element in self.elements]}
 
             return self.json_cached
+
 
 class ArrayPlot3D(Element):
     def __init__(self, array, _sequence_hacks_much_spooky_do_not_use=False):

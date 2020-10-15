@@ -115,7 +115,7 @@ class RetroModule2(Module):
                 + [self.controls()]
                 + [encodings_choices]
                 + data_elements[1:]
-                + [{"Commitment Interval": NumberInput(minimum=1, maximum=None,
+                + [{"Frame Skip": NumberInput(minimum=1, maximum=None,
                                                        value=self.commitment_interval,
                                                        on_change=self.commitment_interval_set)}]
                 + [Button(label="RESET", on_click=self.reset)])

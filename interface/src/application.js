@@ -528,6 +528,7 @@ globalState = {
     images: [],
     selectedImage: null,
     inspectionBoxes: [],
+    inspectionData: {},
     onClick: (event, object) => {
         let {left, top, width, height, bottom, right} = event.target.getBoundingClientRect();
         let imageContainer = event.target.parentNode.parentNode;
@@ -552,6 +553,8 @@ globalState = {
         globalState.onMouseMove(event, object);
     },
     onMouseMove: (event, object) => {
+        let {InstanceId: instanceId} = object;
+
         /* bottom: 499
            height: 448
            left: 281
@@ -571,13 +574,35 @@ globalState = {
         let x = event.clientX - left;
         let y = event.clientY - top;
 
-        let {right: boxRight, top: boxTop} = globalState.inspectionBoxes[0];
-        let popup = <ZoomBox data={object}
-                             mainComponentBoundingBox={{left, top, right, bottom, width, height}}
-                             zoomPosition={{px, py, x, y}}
-                             zoomLevel={7} />;
+        let load = (inspectionData) => {
+            let {right: boxRight, top: boxTop} = globalState.inspectionBoxes[0];
+            let popup = <div>
+                <ZoomBox data={object}
+                        mainComponentBoundingBox={{left, top, right, bottom, width, height}}
+                        zoomPosition={{px, py, x, y}}
+                        zoomLevel={7} />
+                <InspectionTableBox data={object}
+                                    inspectionData={inspectionData}
+                                    mainComponentBoundingBox={{left, top, right, bottom, width, height}}
+                                    zoomPosition={{px, py, x, y}}
+                                    zoomLevel={2} />
+            </div>;
 
-        ReactDOM.render(popup, document.getElementById('inspection-parent'));
+            ReactDOM.render(popup, document.getElementById('inspection-parent'));
+        };
+
+        if (instanceId in globalState.inspectionData) {
+            load(globalState.inspectionData[instanceId]);
+        } else {
+            query({
+                "Request": "Inspection",
+                "ClientId": clientId,
+                "InstanceId": instanceId
+            }, ({Value: value}) => {
+                globalState.inspectionData[instanceId] = value;
+                load(value);
+            });
+        }
     }
 };
 
@@ -617,6 +642,80 @@ class ZoomBox extends React.Component {
                 left: rightMain - left + 4}}>
             <img src={value} className="image-zoom"
                  height={zoomLevel*displayScale*shape[0]} width={zoomLevel*displayScale*shape[1]} />
+        </div>;
+    }
+}
+
+class InspectionTableBox extends React.Component {
+    render() {
+        let { Shape: shape, DisplayScale: displayScale } = this.props.data;
+        let inspectionData = this.props.inspectionData;
+
+        let zoomLevel = this.props.zoomLevel;
+
+        let {top: topMain, right: rightMain, bottom, left, width, height} = this.props.mainComponentBoundingBox;
+        let {px, py, x, y} = this.props.zoomPosition;
+
+        let top = 0;
+        let right = 0;
+
+        [top, bottom, left, right] = [
+            top + height*(py - 0.1),
+            top + height*(py + 0.1),
+            left + width*(px - 0.1),
+            left + width*(px + 0.1)
+        ];
+
+        let pixelRadius = 15;
+
+        [top, bottom, left, right] = [
+            y - pixelRadius,
+            y + pixelRadius,
+            x - pixelRadius,
+            x + pixelRadius
+        ];
+
+        // console.log({top, bottom, left, right});
+        let [dataHeight, dataWidth, dataChannels = 0] = shape;
+        // console.log(dataHeight, dataWidth, dataChannels);
+
+        let dataRowStart = Math.round(top / displayScale);
+        let dataRowStop = Math.round(bottom / displayScale);
+        let dataColumnStart = Math.round(left / displayScale);
+        let dataColumnStop = Math.round(right / displayScale);
+
+        let slice = [...new Uint8Array(dataRowStop - dataRowStart)] .map ((_, row) =>
+                        [...new Uint8Array(dataColumnStop - dataColumnStart)].map((_, column) => {
+                            let rowIndex = dataRowStart + row;
+                            let columnIndex = dataColumnStart + column;
+
+                            if (0 < rowIndex && rowIndex < dataHeight &&
+                                0 < columnIndex && columnIndex < dataWidth) {
+                                return inspectionData[dataRowStart + row][dataColumnStart + column];
+                            } else {
+                                return dataChannels === 0 ? <span>&nbsp;&nbsp;&nbsp;</span> : [...new Uint8Array(dataChannels)] .map (() => <span>&nbsp;&nbsp;&nbsp;</span>);
+                            }
+                        })
+                    );
+
+        [top, bottom, left, right] = [top, bottom, left, right] .map ((n) => zoomLevel*n)
+
+        return <div className="inspection-table-box" channel-count={dataChannels} style={{
+                        top: topMain + 200 + 10,
+                        left: rightMain + 4}}>
+            <table>
+                <tbody>
+                    {slice .map (
+                        (row, rowIndex) => <tr key={rowIndex}>
+                            {row .map ((value, columnIndex) =>
+                                <><td className="left"></td>{
+                                    dataChannels === 0 ? <td>{value}</td>
+                                                       : value .map ((v, i) => <td key={i} className={`i${i}`}>{v}</td>)}
+                                <td className="right"></td></>
+                            )}
+                        </tr>)}
+                </tbody>
+            </table>
         </div>;
     }
 }

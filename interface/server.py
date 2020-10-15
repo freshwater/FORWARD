@@ -33,6 +33,8 @@ class Server(http.server.BaseHTTPRequestHandler):
             # Server.modules[client_id] = retro_module.Active()
         elif request_name == "Event":
             Server.modules[client_id].event_process(request)
+        elif request_name == "Inspection":
+            return Server.modules[client_id].inspection_process(request)
         else:
             return
 

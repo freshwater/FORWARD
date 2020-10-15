@@ -23,7 +23,7 @@ def block_partition(matrix, block_width):
 class Environment3:
     import pickle
     import sklearn.decomposition
-    pca_blocks = pickle.load(open('models/blocks_75923_3_component_3.sklearn.decomposition.PCA.pickle', 'rb'))
+    pca_blocks = pickle.load(open('models/blocks_75923_3_component.sklearn.decomposition.PCA.pickle', 'rb'))
     pca_encodings = pickle.load(open('models/pca_top_4_of_256.sklearn.decomposition.PCA.pickle', 'rb'))
 
     def __init__(self, game, state, actions=[], bk2_location=None):
