@@ -58,10 +58,7 @@ class RetroModule2(Module):
         if self.environment != None:
             self.environment.close()
 
-        print("\n\n", self.state, "\n\n")
-
         self.environment = retro_server.RetroClient(game=self.game, state=self.state)
-        self.frame = self.environment.frame()[::5, ::5]
 
     def game_select(self, game):
         self.game = game
@@ -87,21 +84,18 @@ class RetroModule2(Module):
                 for action in RetroModule2.actions_map.keys()]
 
     def settings(self):
-        if np.random.rand() < 1/6:
-            self.frame = self.environment.frame()[::4, ::4]
-
         # colors, counts = np.unique(self.frame.reshape(-1, 3), axis=0, return_counts=True)
         # background = colors[counts.argmax()]
 
         return ApplicationSettings({
             'Title': self.game,
-            'Thumbnail': Image(self.frame),
+            'Thumbnail': Image(self.frame[::4, ::4]),
             # 'Background': f'rgb({background[0]}, {background[1]}, {background[2]})'
             # 'Background': 'Black'
         })
 
     def interface(self):
-        data_elements = self.environment.interface_render2(self.encodings)
+        (self.frame, data_elements) = self.environment.interface_render2(self.encodings)
 
         game_choices = SelectionList(options=RetroModule2.games_list,
                                      selected_option=self.game,

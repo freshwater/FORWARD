@@ -27,7 +27,7 @@ class DataDisplay extends React.Component {
 
         if (type === "List") {
             return <div className="list">
-                {value .map ((element, index) => <DataDisplay data={element} key={index} index={index} />)}
+                {value .map ((element, index) => <DataDisplay data={element} key={index} index={index} globalState={globalState} />)}
             </div>;
 
         } else if (type === "Dictionary") {
@@ -35,8 +35,8 @@ class DataDisplay extends React.Component {
                 <tbody>
                     { /* Keys and values can be arbitrary structures. For now just use index as UI key. */}
                     {value .map (([key1, value1], index) => <tr key={index}>
-                        <td className="key"><DataDisplay data={key1} /></td>
-                        <td className="value"><DataDisplay data={value1} /></td>
+                        <td className="key"><DataDisplay data={key1} globalState={globalState} /></td>
+                        <td className="value"><DataDisplay data={value1} globalState={globalState} /></td>
                     </tr>)}
                 </tbody>
             </table>;
@@ -44,9 +44,12 @@ class DataDisplay extends React.Component {
         } else if (type === "Image") {
             let {Shape: shape, DisplayScale: displayScale, Elements: elements} = object;
 
-            return <div key={this.props.index} style={{position: 'relative', display: 'inline-block'}}>
+            return <div key={this.props.index} className="image-container" style={{position: 'relative', display: 'inline-block'}}>
                 <div className="image">
-                    <img src={value} className="image" style={{imageRendering: 'pixelated'}} height={displayScale*shape[0]} width={displayScale*shape[1]} />
+                    <img src={value} className="image" style={{imageRendering: 'pixelated'}}
+                                     height={displayScale*shape[0]} width={displayScale*shape[1]}
+                                     onClick={(event) => this.props.globalState.onClick(event, {Value: value, ...object})}
+                                     onMouseMove={(event) => this.props.globalState.onMouseMove(event, {Value: value, ...object})} />
                 </div>
 
                 { elements .map ( ({Type: type,
@@ -503,7 +506,7 @@ class ArrayPlot3D extends React.Component {
             this.animate();
         }
 
-        return <div id={this.domId} style={{background: 'red', width: 340, height: 340}}></div>
+        return <div id={this.domId} style={{width: 340, height: 340}}></div>
     }
 }
 
@@ -518,6 +521,104 @@ function clipboardCopy(text, event) {
     element.style.visibility = 'hidden';
 
     event.target.classList.add('clipboard-clicked');
+}
+
+let globalState = null;
+globalState = {
+    images: [],
+    selectedImage: null,
+    inspectionBoxes: [],
+    onClick: (event, object) => {
+        let {left, top, width, height, bottom, right} = event.target.getBoundingClientRect();
+        let imageContainer = event.target.parentNode.parentNode;
+
+        globalState.selectedImage && globalState.selectedImage.classList.remove('selected');
+
+        let popup = <div className="inspection-box"
+                         style={{top: top, left: right + 4}} />;
+
+        ReactDOM.render(popup, document.getElementById('inspection-parent'));
+
+        globalState.inspectionBoxes = [{left, top, width, height, bottom, right}];
+
+        if (globalState.selectedImage === imageContainer) {
+            globalState.selectedImage = null;
+            ReactDOM.render(<div />, document.getElementById('inspection-parent'));
+        } else {
+            imageContainer.classList.add('selected');
+            globalState.selectedImage = imageContainer;
+        }
+
+        globalState.onMouseMove(event, object);
+    },
+    onMouseMove: (event, object) => {
+        /* bottom: 499
+           height: 448
+           left: 281
+           right: 761
+           top: 51
+           width: 480
+           x: 281
+           y: 51 */
+
+        if (globalState.selectedImage !== event.target.parentNode.parentNode) {
+            return ;
+        }
+
+        let {left, top, right, bottom, width, height} = event.target.getBoundingClientRect();
+        let px = (event.clientX - left) / width;
+        let py = (event.clientY - top) / height;
+        let x = event.clientX - left;
+        let y = event.clientY - top;
+
+        let {right: boxRight, top: boxTop} = globalState.inspectionBoxes[0];
+        let popup = <ZoomBox data={object}
+                             mainComponentBoundingBox={{left, top, right, bottom, width, height}}
+                             zoomPosition={{px, py, x, y}}
+                             zoomLevel={7} />;
+
+        ReactDOM.render(popup, document.getElementById('inspection-parent'));
+    }
+};
+
+class ZoomBox extends React.Component {
+    render() {
+        let { Value: value, Shape: shape, DisplayScale: displayScale } = this.props.data;
+        let zoomLevel = this.props.zoomLevel;
+
+        let {top: topMain, right: rightMain, bottom, left, width, height} = this.props.mainComponentBoundingBox;
+        let {px, py, x, y} = this.props.zoomPosition;
+
+        let top = 0;
+        let right = 0;
+
+        [top, bottom, left, right] = [
+            top + height*(py - 0.1),
+            top + height*(py + 0.1),
+            left + width*(px - 0.1),
+            left + width*(px + 0.1)
+        ];
+
+        let pixelRadius = 15;
+
+        [top, bottom, left, right] = [
+            y - pixelRadius,
+            y + pixelRadius,
+            x - pixelRadius,
+            x + pixelRadius
+        ];
+
+        [top, bottom, left, right] = [top, bottom, left, right] .map ((n) => zoomLevel*n)
+
+        /* rect(top, right, bottom, left) */
+        return <div className="inspection-box" style={{
+                clip: `rect(${top}px, ${right}px, ${bottom}px, ${left}px)`,
+                top: topMain - top,
+                left: rightMain - left + 4}}>
+            <img src={value} className="image-zoom"
+                 height={zoomLevel*displayScale*shape[0]} width={zoomLevel*displayScale*shape[1]} />
+        </div>;
+    }
 }
 
 function setDisplay(data) {
@@ -536,7 +637,7 @@ function setDisplay(data) {
         }
     });
 
-    ReactDOM.render(<DataDisplay data={data}/>, document.getElementById('data-display-container'));
+    ReactDOM.render(<DataDisplay data={data} globalState={globalState}/>, document.getElementById('data-display-container'));
 }
 
 var currentFrameIndex = 0;

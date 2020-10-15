@@ -1,6 +1,7 @@
 
 import torch
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
 
@@ -55,8 +56,8 @@ class Element:
             return List(object)
         elif isinstance(object, dict):
             return Dictionary(object)
-        # elif isinstance(object, matplotlib.axes.Axes):
-        #     return FileImage()
+        elif isinstance(object, pd.DataFrame):
+            return Dataset(object)
         else:
             print("\n\n>", object, "\n\n")
             1 / 0
@@ -105,6 +106,15 @@ class Dictionary(Element):
         return {"Type": "Dictionary",
                 "Value": [(key.json(), value1.json())
                           for key, value1 in self.value]}
+
+class Dataset(Element):
+    def __init__(self, dataset):
+        self.value = dataset
+
+    def json(self):
+        return {"Type": "Array2D",
+                "Value": self.value.values.tolist()}
+
 
 class List(Element):
     def __init__(self, value):

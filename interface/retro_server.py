@@ -4,6 +4,7 @@ import http.server
 import sys
 
 import torch
+import torch.nn.functional as F
 import uuid
 import numpy as np
 import retro
@@ -20,6 +21,11 @@ def block_partition(matrix, block_width):
     return matrix
 
 class Environment3:
+    import pickle
+    import sklearn.decomposition
+    pca_blocks = pickle.load(open('models/blocks_75923_3_component_3.sklearn.decomposition.PCA.pickle', 'rb'))
+    pca_encodings = pickle.load(open('models/pca_top_4_of_256.sklearn.decomposition.PCA.pickle', 'rb'))
+
     def __init__(self, game, state, actions=[], bk2_location=None):
         self.environment = retro.make(game=game, state=state, record=bk2_location)
 
@@ -30,10 +36,6 @@ class Environment3:
         self.encodings = set()
         self.encodings_frame = set()
         self.encodings_all = []
-
-        import sklearn.decomposition
-        import pickle
-        self.pca = pickle.load(open('models/pca_top_4_of_256.sklearn.decomposition.PCA', 'rb'))
 
         random_key = str(uuid.uuid4())
         self.image_files_folder = random_key
@@ -152,6 +154,34 @@ class Environment3:
         self.blocks_seen_urls = sorted(self.blocks_seen_urls)
         return self.frame.tolist(), list(self.encodings_frame), self.blocks_seen_urls, self.frame_index
 
+    def block_pca(self):
+        import forward
+        import pandas as pd
+
+        frame_chw = torch.tensor(self.frame).permute(2, 0, 1)
+
+        unfolded = F.unfold(input=frame_chw.unsqueeze(0).float(),
+                            kernel_size=(16, 16),
+                            stride=(16, 16))
+
+        blocks_chw = unfolded.squeeze().T.reshape(-1, 3, 16, 16)
+        frames_hwc = blocks_chw.permute(0, 2, 3, 1)
+
+        ts = Environment3.pca_blocks.transform(frames_hwc.reshape(-1, 16*16*3))
+
+        ts = ts[4*15:-1*15]
+        # return pd.DataFrame(ts).describe()
+
+        mins_maxs = np.array([[-1653.122679835112, 2280.690047041602],
+                              [-1306.2888620104206, 1849.7466062093176],
+                              [-1345.0536233578957, 2515.16959599922]])
+
+        rescaled = (ts.T - mins_maxs[:,[0]]) / (mins_maxs[:,[1]] - mins_maxs[:,[0]])
+        rescaled = (rescaled.T*255).astype(np.uint8)
+        # rescaled = rescaled[:, [2, 0, 1]]
+        rescaled = rescaled.reshape(-1, 15, 3)
+
+        return forward.Image(rescaled, display_scale=12)
 
     def interface_render2(self, show_encodings):
         import torch
@@ -225,7 +255,7 @@ class Environment3:
         fig, ax2 = plt.subplots(figsize=(2, 2))
 
         if self.encodings_all != []:
-            all_x, all_y = self.pca.transform(self.encodings_all).T
+            all_x, all_y = Environment3.pca_encodings.transform(self.encodings_all).T
             ax2.plot(all_x, all_y, lw=0.2, color='gray')
             ax2.scatter(all_x, all_y, lw=0, c=np.linspace(1, 0, num=len(all_x)), cmap='gray', s=4);
 
@@ -233,7 +263,7 @@ class Environment3:
         ax2.set_ylim(-0.7623395, 1.0323112)
         plt.xticks(fontsize=6)
         plt.yticks(fontsize=6)
-        ax2.set_title("PCA", fontsize=8)
+        ax2.set_title("Frame Encodings PCA", fontsize=8)
 
         filename2 = f'/tmp/{uuid.uuid4()}.png'
         plt.savefig(filename2, dpi=300)
@@ -282,9 +312,10 @@ class Environment3:
         empty = np.ones(frame[::3, ::3].shape)
         empty[::,::,3] = 0
 
-        return [fwd.Image(self.frame, elements=regions, display_scale=2),
+        return (self.frame, [fwd.Image(self.frame, elements=regions, display_scale=2),
 
-                fwd.Image(output_array, display_scale=12),
+                {"Encodings": fwd.Image(output_array, display_scale=12),
+                 "PCA RGB": self.block_pca()},
 
                 {"R": fwd.Image(self.frame[::2,::2,0], color_map='Grayscale'),
                  "G": fwd.Image(self.frame[::2,::2,1], color_map='Grayscale'),
@@ -303,7 +334,7 @@ class Environment3:
                 {'Frame Index': self.frame_index,
                  'Blocks Count': len(block_images)},
                 {'Blocks': block_images}
-        ]
+        ])
 
 
 class RetroClient:

@@ -28,9 +28,9 @@ class Server(http.server.BaseHTTPRequestHandler):
         import retro_module
 
         if request_name == "Initial":
-            # Server.modules[client_id] = retro_module.RetroModule2()
+            Server.modules[client_id] = retro_module.RetroModule2()
             # Server.modules[client_id] = retro_module.CurvyThing()
-            Server.modules[client_id] = retro_module.Active()
+            # Server.modules[client_id] = retro_module.Active()
         elif request_name == "Event":
             Server.modules[client_id].event_process(request)
         else:

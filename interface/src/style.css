@@ -30,12 +30,33 @@
     line-height: 0px;
 }
 
+.list > * {
+    margin: 5px;
+}
+
 .list .list > * {
     margin: 0.5px;
 }
 
+.list .list > .image-container {
+    margin: 0.5px;
+    border: none;
+    padding: 0px;
+}
+
 .region, .number {
     font-family: Consolas, 'Courier New', Courier, monospace;
+}
+
+.image-container {
+    border: 2px solid transparent;
+    padding: 1px;
+}
+
+.image-container.selected {
+    border: 2px solid #1c7ecc;
+    border-radius: 2px;
+    padding: 1px;
 }
 
 div.image {
@@ -44,6 +65,23 @@ div.image {
     flex-direction: row;
     align-items: center;
     justify-content: center;
+}
+
+.inspection-box {
+    width: 200px;
+    height: 200px;
+}
+
+.inspection-box {
+    display: block;
+    position: fixed;
+    z-index: 1;
+    top: 280px;
+    left: 280px;
+}
+
+.image-zoom {
+    image-rendering: pixelated;
 }
 
 /*.value div.image:hover {
@@ -66,6 +104,7 @@ table.array td {
     text-align: center;
     border: 0.5px solid #eee;
     border-collapse: collapse;
+    min-height: 8px;
 }
 
 table.array tr:last-child, .array tr:last-child td {
@@ -76,11 +115,12 @@ table.array tr:last-child, .array tr:last-child td {
     font-size: 0.95em;
 }
 
-.dictionary td:first-child {
+.dictionary .key {
     font-family: Consolas, 'Courier New', Courier, monospace;
+    text-align: right;
 }
 
-.dictionary td:first-child:after {
+.dictionary .key:after {
     color: #ccc;
     font-weight: lighter;
     content: ':';
