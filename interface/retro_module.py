@@ -110,7 +110,7 @@ class RetroModule2(Module):
                                       selected_options=["Encodings"] if self.encodings else [],
                                       on_check=self.encoding_display_set)
 
-        ss = ([self.settings()] + [game_choices, state_choices]
+        return ([self.settings()] + [game_choices, state_choices]
                 + data_elements[:1]
                 + [self.controls()]
                 + [encodings_choices]
@@ -119,8 +119,6 @@ class RetroModule2(Module):
                                                        value=self.commitment_interval,
                                                        on_change=self.commitment_interval_set)}]
                 + [Button(label="RESET", on_click=self.reset)])
-
-        return ss
 
 
 class RetroModule1(Module):

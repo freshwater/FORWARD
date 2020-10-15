@@ -1,46 +1,40 @@
 
 import http.server
 
-import json
-import torch
-import numpy as np
-import retro
-
-import uuid
 import os
-import matplotlib.pyplot as plt
+import uuid
+import json
 
-import time
-
-import forward
-import retro_server
+import retro_module
 
 
 class Server(http.server.BaseHTTPRequestHandler):
-    modules = {}
-
     files_cache = {}
+    modules = {}
 
     def request_process(self, request):
         request_name = request["Request"]
         client_id = request["ClientId"]
 
-        import retro_module
-
         if request_name == "Initial":
             Server.modules[client_id] = retro_module.RetroModule2()
-            # Server.modules[client_id] = retro_module.CurvyThing()
-            # Server.modules[client_id] = retro_module.Active()
+
+            return {
+                'Data': Server.modules[client_id].interface_json()
+            }
+
         elif request_name == "Event":
             Server.modules[client_id].event_process(request)
+
+            return {
+                'Data': Server.modules[client_id].interface_json()
+            }
+
         elif request_name == "Inspection":
             return Server.modules[client_id].inspection_process(request)
-        else:
-            return
 
-        return {
-            'Data': Server.modules[client_id].interface_json()
-        }
+        else:
+            raise NotImplementedError(request)
 
     def request_process0(self, request):
         request_name = request["Request"]
@@ -123,7 +117,6 @@ class Server(http.server.BaseHTTPRequestHandler):
         import time
         t0 = time.time()
         response = self.request_process(request)
-        # print(f"{len(json.dumps(response))}_____request_____{time.time() - t0}")
 
         self.wfile.write(json.dumps(response).encode())
 

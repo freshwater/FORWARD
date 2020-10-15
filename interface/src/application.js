@@ -24,6 +24,7 @@ ReactDOM.render([<DownloadsSelection id={downloadId} values={[".mp4 Replay Video
 class DataDisplay extends React.Component {
     render() {
         let {Type: type, Value: value, ...object} = this.props.data;
+        let globalState = this.props.globalState;
 
         if (type === "List") {
             return <div className="list">
@@ -49,7 +50,8 @@ class DataDisplay extends React.Component {
                     <img src={value} className="image" style={{imageRendering: 'pixelated'}}
                                      height={displayScale*shape[0]} width={displayScale*shape[1]}
                                      onClick={(event) => this.props.globalState.onClick(event, {Value: value, ...object})}
-                                     onMouseMove={(event) => this.props.globalState.onMouseMove(event, {Value: value, ...object})} />
+                                     onMouseMove={(event) => this.props.globalState.onMouseMove(event, {Value: value, ...object})}
+                                     onMouseLeave={(event) => this.props.globalState.onMouseLeave(event)} />
                 </div>
 
                 { elements .map ( ({Type: type,
@@ -96,7 +98,7 @@ class DataDisplay extends React.Component {
 
             return <table key={this.props.index} className="array">
                 <tbody>
-                {value .map ( (row, i) => <tr key={i}>{row .map ((elem, j) => <td key={j}>{elem}</td> )}</tr>)}
+                {value .map ((row, i) => <tr key={i}>{row .map ((elem, j) => <td key={j}>{elem}</td> )}</tr>)}
                 </tbody>
             </table>;
 
@@ -127,10 +129,10 @@ class DataDisplay extends React.Component {
             return <CheckList data={this.props.data} />;
 
         } else if (type === "NumberInput") {
-            let {Label: label, Id: id, Minimum: min, Maximum: max, Value: value} = this.props.data;
+            let {/*Label: label,*/ Id: id, Minimum: min, Maximum: max, Value: value} = this.props.data;
             let onChange = function (event) {
                 let newValue = event.target.value;
-                // event.target.blur();
+
                 query({
                     "Request": "Event",
                     "ClientId": clientId,
@@ -352,7 +354,7 @@ class ArrayPlot3D extends React.Component {
 
             let template = new THREE.Object3D();
 
-            let t0 = performance.now();
+            // let t0 = performance.now();
 
             /*
                 Bucket sort with number of buckets = n.
@@ -523,48 +525,36 @@ function clipboardCopy(text, event) {
     event.target.classList.add('clipboard-clicked');
 }
 
-let globalState = null;
-globalState = {
+let globalState_ = null;
+globalState_ = {
     images: [],
     selectedImage: null,
-    inspectionBoxes: [],
     inspectionData: {},
     onClick: (event, object) => {
         let {left, top, width, height, bottom, right} = event.target.getBoundingClientRect();
         let imageContainer = event.target.parentNode.parentNode;
 
-        globalState.selectedImage && globalState.selectedImage.classList.remove('selected');
+        globalState_.selectedImage && globalState_.selectedImage.classList.remove('selected');
 
         let popup = <div className="inspection-box"
                          style={{top: top, left: right + 4}} />;
 
         ReactDOM.render(popup, document.getElementById('inspection-parent'));
 
-        globalState.inspectionBoxes = [{left, top, width, height, bottom, right}];
-
-        if (globalState.selectedImage === imageContainer) {
-            globalState.selectedImage = null;
+        if (globalState_.selectedImage === imageContainer) {
+            globalState_.selectedImage = null;
             ReactDOM.render(<div />, document.getElementById('inspection-parent'));
         } else {
             imageContainer.classList.add('selected');
-            globalState.selectedImage = imageContainer;
+            globalState_.selectedImage = imageContainer;
         }
 
-        globalState.onMouseMove(event, object);
+        globalState_.onMouseMove(event, object);
     },
     onMouseMove: (event, object) => {
         let {InstanceId: instanceId} = object;
 
-        /* bottom: 499
-           height: 448
-           left: 281
-           right: 761
-           top: 51
-           width: 480
-           x: 281
-           y: 51 */
-
-        if (globalState.selectedImage !== event.target.parentNode.parentNode) {
+        if (globalState_.selectedImage !== event.target.parentNode.parentNode) {
             return ;
         }
 
@@ -575,33 +565,41 @@ globalState = {
         let y = event.clientY - top;
 
         let load = (inspectionData) => {
-            let {right: boxRight, top: boxTop} = globalState.inspectionBoxes[0];
             let popup = <div>
                 <ZoomBox data={object}
                         mainComponentBoundingBox={{left, top, right, bottom, width, height}}
-                        zoomPosition={{px, py, x, y}}
+                        zoomPosition={{x, y}}
                         zoomLevel={7} />
                 <InspectionTableBox data={object}
                                     inspectionData={inspectionData}
                                     mainComponentBoundingBox={{left, top, right, bottom, width, height}}
-                                    zoomPosition={{px, py, x, y}}
+                                    zoomPosition={{x, y}}
                                     zoomLevel={2} />
             </div>;
 
             ReactDOM.render(popup, document.getElementById('inspection-parent'));
+            document.getElementById('inspection-parent').style.visibility = 'visible';
         };
 
-        if (instanceId in globalState.inspectionData) {
-            load(globalState.inspectionData[instanceId]);
+        if (instanceId in globalState_.inspectionData) {
+            if (globalState_.inspectionData[instanceId] !== "InFlight") {
+                load(globalState_.inspectionData[instanceId]);
+            }
         } else {
+            globalState_.inspectionData[instanceId] = "InFlight";
             query({
                 "Request": "Inspection",
                 "ClientId": clientId,
                 "InstanceId": instanceId
             }, ({Value: value}) => {
-                globalState.inspectionData[instanceId] = value;
+                globalState_.inspectionData[instanceId] = value;
                 load(value);
             });
+        }
+    },
+    onMouseLeave: (event) => {
+        if (globalState_.selectedImage === event.target.parentNode.parentNode) {
+            document.getElementById('inspection-parent').style.visibility = 'hidden';
         }
     }
 };
@@ -611,29 +609,17 @@ class ZoomBox extends React.Component {
         let { Value: value, Shape: shape, DisplayScale: displayScale } = this.props.data;
         let zoomLevel = this.props.zoomLevel;
 
-        let {top: topMain, right: rightMain, bottom, left, width, height} = this.props.mainComponentBoundingBox;
-        let {px, py, x, y} = this.props.zoomPosition;
-
-        let top = 0;
-        let right = 0;
-
-        [top, bottom, left, right] = [
-            top + height*(py - 0.1),
-            top + height*(py + 0.1),
-            left + width*(px - 0.1),
-            left + width*(px + 0.1)
-        ];
+        let {top: topMain, right: rightMain} = this.props.mainComponentBoundingBox;
+        let {x, y} = this.props.zoomPosition;
 
         let pixelRadius = 15;
 
-        [top, bottom, left, right] = [
+        let [top, bottom, left, right] = [
             y - pixelRadius,
             y + pixelRadius,
             x - pixelRadius,
             x + pixelRadius
-        ];
-
-        [top, bottom, left, right] = [top, bottom, left, right] .map ((n) => zoomLevel*n)
+        ] .map (_ => _*zoomLevel);
 
         /* rect(top, right, bottom, left) */
         return <div className="inspection-box" style={{
@@ -653,36 +639,30 @@ class InspectionTableBox extends React.Component {
 
         let zoomLevel = this.props.zoomLevel;
 
-        let {top: topMain, right: rightMain, bottom, left, width, height} = this.props.mainComponentBoundingBox;
-        let {px, py, x, y} = this.props.zoomPosition;
-
-        let top = 0;
-        let right = 0;
-
-        [top, bottom, left, right] = [
-            top + height*(py - 0.1),
-            top + height*(py + 0.1),
-            left + width*(px - 0.1),
-            left + width*(px + 0.1)
-        ];
+        let {top: topMain, right: rightMain} = this.props.mainComponentBoundingBox;
+        let {x, y} = this.props.zoomPosition;
 
         let pixelRadius = 15;
 
-        [top, bottom, left, right] = [
+        let [top, bottom, left, right] = [
             y - pixelRadius,
             y + pixelRadius,
             x - pixelRadius,
             x + pixelRadius
         ];
 
-        // console.log({top, bottom, left, right});
         let [dataHeight, dataWidth, dataChannels = 0] = shape;
-        // console.log(dataHeight, dataWidth, dataChannels);
 
-        let dataRowStart = Math.round(top / displayScale);
-        let dataRowStop = Math.round(bottom / displayScale);
-        let dataColumnStart = Math.round(left / displayScale);
-        let dataColumnStop = Math.round(right / displayScale);
+        let dataRowStart = top / displayScale;
+        let dataRowStop = bottom / displayScale;
+        let dataColumnStart = left / displayScale;
+        let dataColumnStop = right / displayScale;
+
+        // Need stable span as user moves mouse around.
+        dataRowStop = Math.round(dataRowStart) + Math.ceil(dataRowStop - dataRowStart);
+        dataRowStart = Math.round(dataRowStart);
+        dataColumnStop = Math.round(dataColumnStart) + Math.ceil(dataColumnStop - dataColumnStart);
+        dataColumnStart = Math.round(dataColumnStart);
 
         let slice = [...new Uint8Array(dataRowStop - dataRowStart)] .map ((_, row) =>
                         [...new Uint8Array(dataColumnStop - dataColumnStart)].map((_, column) => {
@@ -693,13 +673,13 @@ class InspectionTableBox extends React.Component {
                                 0 < columnIndex && columnIndex < dataWidth) {
                                 return inspectionData[dataRowStart + row][dataColumnStart + column];
                             } else {
-                                return dataChannels === 0 ? <span>&nbsp;&nbsp;&nbsp;</span> : [...new Uint8Array(dataChannels)] .map (() => <span>&nbsp;&nbsp;&nbsp;</span>);
+                                return dataChannels === 0 ? <span>&nbsp;&nbsp;&nbsp;</span>
+                                                          : [...new Uint8Array(dataChannels)] .map (() => <span>&nbsp;&nbsp;&nbsp;</span>);
                             }
                         })
                     );
 
-        [top, bottom, left, right] = [top, bottom, left, right] .map ((n) => zoomLevel*n)
-
+        let keyMake = (a, b, c) => `(${a},${b},${c})`;
         return <div className="inspection-table-box" channel-count={dataChannels} style={{
                         top: topMain + 200 + 10,
                         left: rightMain + 4}}>
@@ -708,10 +688,10 @@ class InspectionTableBox extends React.Component {
                     {slice .map (
                         (row, rowIndex) => <tr key={rowIndex}>
                             {row .map ((value, columnIndex) =>
-                                <><td className="left"></td>{
-                                    dataChannels === 0 ? <td>{value}</td>
-                                                       : value .map ((v, i) => <td key={i} className={`i${i}`}>{v}</td>)}
-                                <td className="right"></td></>
+                                <React.Fragment key={keyMake(rowIndex, columnIndex, 0)}><td key={keyMake(rowIndex, columnIndex, 1)} className="left"></td>{
+                                    dataChannels === 0 ? <td key={keyMake(rowIndex, columnIndex, 2)}>{value}</td>
+                                                       : value .map ((v, i) => <td key={keyMake(rowIndex, columnIndex, 2 + i)} className={`i${i}`}>{v}</td>)}
+                                <td key={keyMake(rowIndex, columnIndex, -1)} className="right"></td></React.Fragment>
                             )}
                         </tr>)}
                 </tbody>
@@ -736,7 +716,7 @@ function setDisplay(data) {
         }
     });
 
-    ReactDOM.render(<DataDisplay data={data} globalState={globalState}/>, document.getElementById('data-display-container'));
+    ReactDOM.render(<DataDisplay data={data} globalState={globalState_}/>, document.getElementById('data-display-container'));
 }
 
 var currentFrameIndex = 0;

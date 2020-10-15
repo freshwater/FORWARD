@@ -105,9 +105,13 @@ div.image {
 }
 
 .inspection-table-box table {
-    font-size: small;
+    font-size: xx-small;
     font-family: Consolas, 'Courier New', Courier, monospace;
     text-align: right;
+}
+
+.inspection-table-box table td {
+    padding: 0px;
 }
 
 .inspection-table-box table tr {

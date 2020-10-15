@@ -296,8 +296,8 @@ class FileImage(Element):
 
 
 class Image(Element):
-    def __init__(self, array, elements=[], display_scale=1, color_map=None):
-        self.raw_data = array
+    def __init__(self, array, elements=[], display_scale=1, color_map=None, inspect_form=None):
+        self.raw_data = inspect_form if inspect_form is not None else array
         self.instance_id = str(uuid.uuid4())
 
         if isinstance(array, torch.Tensor):
@@ -322,7 +322,7 @@ class Image(Element):
     def inspection_process(self, request):
         if request['InstanceId'] == self.instance_id:
             return {"Type": "Inspection",
-                    "Value": self.raw_data.tolist()}
+                    "Value": np.array(self.raw_data).tolist()}
 
     def json(self):
         self.count += 1

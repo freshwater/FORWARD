@@ -1,8 +1,4 @@
 
-import json
-import http.server
-import sys
-
 import torch
 import torch.nn.functional as F
 import uuid
@@ -181,27 +177,11 @@ class Environment3:
         # rescaled = rescaled[:, [2, 0, 1]]
         rescaled = rescaled.reshape(-1, 15, 3)
 
-        return forward.Image(rescaled, display_scale=12)
+        return forward.Image(rescaled, display_scale=12, inspect_form=ts.reshape(-1, 15, 3))
 
     def interface_render2(self, show_encodings):
-        import torch
-        import torch.nn.functional as F
-
-        import forward as fwd
-
-        # self.blocks_seen_urls = sorted(self.blocks_seen_urls)
-        # return self.frame.tolist(), list(self.encodings_frame), self.blocks_seen_urls, self.frame_index
-
-        # ax1.hist(self.frame.ravel())
-        # plt.plot(sorted(self.frame.ravel()))
-        # plt.imshow(self.frame[:,:,0])
-
-        # tensor = torch.tensor(np.stack(self.frames_all)).float()
         tensor = torch.tensor(self.frame, dtype=torch.float).unsqueeze(0)
         images = tensor.permute(0, 3, 1, 2)
-        
-        # id_ = str(uuid.uuid4())
-        # np.savez_compressed(f'/tmp/{id}.npz', np.stack(self.frames_all).astype('uint8'))
 
         output = F.conv2d(input=images,
                           weight=self.filter_,
@@ -243,7 +223,7 @@ class Environment3:
         fig, ax1 = plt.subplots(figsize=(2, 2))
 
         ax1.imshow(np.diff(self.encodings_all or [[0]], axis=0), aspect='auto', cmap='gray')
-        ax1.set_xticks(ticks=range(0, 9*15+1, 15));
+        ax1.set_xticks(ticks=range(0, 9*15+1, 15))
         plt.xticks(fontsize=6)
         plt.yticks(fontsize=6)
         ax1.set_title("Diffs", fontsize=8)
@@ -277,8 +257,6 @@ class Environment3:
             arr[arr < 0.85] = arr[arr < 0.85]**4
 
             return arr
-
-        # arr = np.stack([ring(width=121, radius=r/2) for r in range(30, 60, 2)])
 
         frame = self.frame
         padded = 255*np.ones((frame.shape[0], frame.shape[1], frame.shape[2]+1))
