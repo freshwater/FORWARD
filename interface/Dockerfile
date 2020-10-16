@@ -77,6 +77,7 @@ COPY roms roms
 
 RUN python3 -m retro.import roms
 RUN npx babel --presets @babel/react application.js -o application.js
+RUN npx babel --presets @babel/react ArrayPlot3D.js -o ArrayPlot3D.js
 RUN npx webpack ./application.js --mode=development --output-path='.' --output-filename=application.js
 
 

@@ -1,7 +1,7 @@
 
 # Forward
 
-Initially a custom experimental tool to make sure I wasn't running into conceptual or implementation bugs for an RL idea I wanted to try, I am currently in the process of turning it into a more general tool for rapidly throwing together no-frills interfaces in Python.
+Initially a custom experimental tool to make sure I wasn't running into conceptual or implementation bugs for an RL idea, I am currently in the process of turning it into a more general tool for rapidly throwing together no-frills interfaces in Python.
 
 The idea is to make it easy for researchers to generate exploratory UIs to aid in the development of data analysis and machine learning ideas.
 
