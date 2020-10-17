@@ -15,7 +15,12 @@ export class ArrayPlot3D extends React.Component {
         this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         this.camera = null;
         this.previousCameraPosition = new THREE.Vector3(0, 0, 0);
+        this.previousMousePosition = new THREE.Vector2(0, 0);
         this.mesh = null;
+        this.lines = null;
+        this.positionToIndices = () => {};
+        this.lastKMouseOverCoordinates = [];
+        this.mousePosition = new THREE.Vector2(1, 1);
         this.geometry = null;
         this.material = null;
 
@@ -121,12 +126,21 @@ export class ArrayPlot3D extends React.Component {
         controls.maxDistance = 340;
 
         domElement.addEventListener('resize', onWindowResize, false);
+        domElement.addEventListener('mousemove', onMouseMove, false);
 
         function onWindowResize() {
             this.camera.aspect = domElement.clientWidth / domElement.clientHeight;
             this.camera.updateProjectionMatrix();
 
             this.renderer.setSize(domElement.clientWidth, domElement.clientHeight);
+        }
+
+        let this1 = this;
+        function onMouseMove(event) {
+            event.preventDefault();
+
+            this1.mousePosition.x = (event.offsetX / domElement.clientWidth)*2 - 1;
+            this1.mousePosition.y = -(event.offsetY / domElement.clientHeight)*2 + 1.01;
         }
     }
 
@@ -137,10 +151,13 @@ export class ArrayPlot3D extends React.Component {
             return ;
         }
 
+        let shouldUpdate = false;
+
         // Couldn't figure out a depth/blend setting to automatically set
         // the render order as back-to-front from any direction.
         // This will work for now.
         if (!this.camera.position.equals(this.previousCameraPosition) && Math.random() < 1) {
+            shouldUpdate = true;
             this.previousCameraPosition.copy(this.camera.position);
 
             let template = new THREE.Object3D();
@@ -162,12 +179,13 @@ export class ArrayPlot3D extends React.Component {
             });
 
             // Bucketize
+            // this.positionsIndices.push([position, index, 0, isEdgeBlock]);
             this.buckets .forEach ((_, index) => { this.buckets[index] = [] });
             let increment = 1 / this.positionsIndices.length;
             this.positionsIndices .forEach ((tuple) => {
                 // ignore fully transparent blocks
-                if (this.instanceColorsOriginal[4*tuple[1] + 3] !== 0) {
-                    let cameraDistance = tuple[2];
+                let [_position, indexOriginal, cameraDistance, isEdgeBlock] = tuple;
+                if (isEdgeBlock || this.instanceColorsOriginal[4*indexOriginal + 3] !== 0) {
                     cameraDistance = (cameraDistance - min) / (max - min);
                     cameraDistance = 1 - cameraDistance;
 
@@ -193,10 +211,54 @@ export class ArrayPlot3D extends React.Component {
                     index += 1;
                 });
             });
+        }
 
+        if (!this.mousePosition.equals(this.previousMousePosition)) {
+            shouldUpdate = true;
+            this.previousMousePosition.copy(this.mousePosition);
+
+            let raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(this.mousePosition, this.camera);
+            let intersection = raycaster.intersectObject(this.mesh);
+
+            if (intersection.length > 0) {
+                let instanceId = intersection[0].instanceId;
+
+                this.instanceColors[4*instanceId + 0] = 1;
+                this.instanceColors[4*instanceId + 1] = 0;
+                this.instanceColors[4*instanceId + 2] = 0;
+                this.instanceColors[4*instanceId + 3] = 1;
+
+                // let matrix = new THREE.Matrix4();
+                // this.mesh.getMatrixAt(instanceId, matrix);
+                // let index012 = this.positionToIndices(matrix.elements.slice(12, 12 + 3));
+                this.lastKMouseOverCoordinates.push(intersection[0].point);
+                if (this.lastKMouseOverCoordinates.length > 12) {
+                    this.lastKMouseOverCoordinates = this.lastKMouseOverCoordinates.slice(1);
+                }
+
+                let [dX, dY, dZ] = [0, 0, 0];
+                this.lastKMouseOverCoordinates.slice(1) .forEach ((_, index) => {
+                    let {x: x2, y: y2, z: z2} = this.lastKMouseOverCoordinates[index + 1];
+                    let {x: x1, y: y1, z: z1} = this.lastKMouseOverCoordinates[index];
+
+                    [dX, dY, dZ] = [
+                        dX + x2 - x1,
+                        dY + y2 - y1,
+                        dZ + z2 - z1
+                    ];
+                });
+
+                let length = this.lastKMouseOverCoordinates.length - 1;
+                [dX, dY, dZ] = [dX, dY, dZ] .map (_ => parseInt(`${Math.sign(Math.round(_ / length))}`, 10));
+
+                console.log(dX, dY, dZ);
+            }
+        }
+
+        if (shouldUpdate) {
             this.mesh.instanceMatrix.needsUpdate = true;
             this.mesh.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(this.instanceColors, 4));
-
             this.renderer.render(this.scene, this.camera);
         }
     }
@@ -245,11 +307,20 @@ export class ArrayPlot3D extends React.Component {
         let mean2 = rescale * shape[2] / 2;
 
         this.scene.remove(this.mesh);
+        this.scene.remove(this.lines);
         this.mesh = new THREE.InstancedMesh(this.geometry, this.material, totalCount);
         this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
         let template = new THREE.Object3D();
         let index = 0;
+
+        this.positionToIndices = ([x, y, z]) => {
+            return [
+                Math.round((-x + mean0 - k*0.5) / k),
+                Math.round((-y + mean1 - k*0.5) / k),
+                Math.round((-z + mean2 - k*0.5) / k),
+            ];
+        };
 
         let k = scale / max;
         array .forEach ( (axis1, index0) =>  {
@@ -259,10 +330,19 @@ export class ArrayPlot3D extends React.Component {
                                                      -(k*index1 + k*0.5 - mean1),
                                                      -(k*index2 + k*0.5 - mean2))
 
+                    // Used to keep transparent edge blocks for mouse cursor intersection
+                    // that would otherwise be removed.
+                    // A better method will be to just use one large cube for the
+                    // intersection and use the point to determine the underlying block.
+                    let isEdgeBlock = (index0 === 0 || index1 === 0 || index2 === 0
+                                       || index0 === shape[0] - 1
+                                       || index1 === shape[1] - 1
+                                       || index2 === shape[2] - 1);
+
                     template.position.copy(position);
                     template.updateMatrix();
                     this.mesh.setMatrixAt(index, template.matrix);
-                    this.positionsIndices.push([position, index, 0]);
+                    this.positionsIndices.push([position, index, 0, isEdgeBlock]);
 
                     if (format === 0) {
                         this.instanceColorsOriginal[4*index + 0] = 0.55;
@@ -289,6 +369,40 @@ export class ArrayPlot3D extends React.Component {
         this.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(new Float32Array(this.instanceColorsOriginal), 4));
 
         this.scene.add(this.mesh);
+
+        // EulerianGraphQ@PetersonGraph[4, 1] False
+        let ps = [
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 1, 1],
+            [0, 1, 0],
+
+            [0, 0, 0],
+            [1, 0, 0],
+            [1, 0, 1], [0, 0, 1], [1, 0, 1],
+            [1, 1, 1], [0, 1, 1], [1, 1, 1],
+            [1, 1, 0], [0, 1, 0], [1, 1, 0],
+            [1, 0, 0]
+        ];
+
+        let [h, w, d] = shape;
+        let corners = ps .map(([i, j, k]) => [h*i, w*j, d*k]);
+
+        corners = corners .map ( ([x, y, z]) => {
+            return new THREE.Vector3(-(k*x - mean0),
+                                     -(k*y - mean1),
+                                     -(k*z - mean2));
+        });
+
+        let material = new THREE.LineBasicMaterial({
+            color: 0x00b0b0,
+        });
+
+        let geometry = new THREE.BufferGeometry().setFromPoints(corners);
+        this.lines = new THREE.Line(geometry, material);
+
+        this.scene.add(this.lines);
+
         this.renderer.render(this.scene, this.camera);
     };
 
