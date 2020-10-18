@@ -21,6 +21,9 @@ export class ArrayPlot3D extends React.Component {
         this.positionToIndices = () => {};
         this.lastKMouseOverCoordinates = [];
         this.mousePosition = new THREE.Vector2(1, 1);
+        this.cuboids = [];
+        // this.previousSlicesScanSignatureChangeTime = performance.now();
+        // this.previousSlicesScanSignature = [0, 0, 0];
         this.geometry = null;
         this.material = null;
 
@@ -144,7 +147,205 @@ export class ArrayPlot3D extends React.Component {
         }
     }
 
+    meshCreate() {
+        let {Value: array, Shape: shape} = this.props.data;
+        let totalCount = shape[0] * shape[1] * shape[2];
+
+        let {ValueReferences: references, ValueReferencesEncodedInsert: inserts} = this.props.data;
+
+        if (references) {
+            for (let reference in inserts) {
+                // Base64 decode
+                let binary = atob(inserts[reference]);
+
+                // Probably better to just flatten the index on each drawing pass rather than reshape here.
+                // The implementation complexity of this is low so keeping for now.
+                let index = 0;
+                let array = [...new Uint8Array(shape[1])] .map (() =>
+                                [...new Uint8Array(shape[2])].map(() =>
+                                    [...new Uint8Array(shape[3])].map(() => binary.charCodeAt(index++))
+                                )
+                            );
+
+                this.valueReferences[reference] = array;
+            }
+
+            array = references .map ((reference) => this.valueReferences[reference]);
+        }
+
+        let format = 0;
+        if (shape.length === 4) {
+            format = shape[3];
+        }
+
+        this.positionsIndices = [];
+        this.buckets = [...new Array(totalCount + 1)] .map (() => []);
+        this.instanceColorsOriginal = new Float32Array(4*totalCount);
+        this.instanceColors = new Float32Array(4*totalCount);
+
+        let scale = 100;
+        let max = Math.max(...shape);
+        let rescale = scale / max;
+        let mean0 = rescale * shape[0] / 2;
+        let mean1 = rescale * shape[1] / 2;
+        let mean2 = rescale * shape[2] / 2;
+
+        this.scene.remove(this.mesh);
+        this.scene.remove(this.lines);
+        for (let cuboid of this.cuboids) {
+            this.scene.remove(cuboid);
+        }
+        this.cuboids = [];
+
+        this.mesh = new THREE.InstancedMesh(this.geometry, this.material, totalCount);
+        this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+        let template = new THREE.Object3D();
+        let index = 0;
+
+        this.positionToIndices = ([x, y, z]) => {
+            return [
+                Math.round((-x + mean0 - k*0.5) / k),
+                Math.round((-y + mean1 - k*0.5) / k),
+                Math.round((-z + mean2 - k*0.5) / k),
+            ];
+        };
+
+        let k = scale / max;
+        array .forEach ( (axis1, index0) =>  {
+            axis1 .forEach ( (axis2, index1) => {
+                axis2 .forEach ( (value, index2) => {
+                    let position = new THREE.Vector3(-(k*index0 + k*0.5 - mean0),
+                                                     -(k*index1 + k*0.5 - mean1),
+                                                     -(k*index2 + k*0.5 - mean2))
+
+                    // Used to keep transparent edge blocks for mouse cursor intersection
+                    // that would otherwise be removed.
+                    // A better method will be to just use one large cube for the
+                    // intersection and use the point to determine the underlying block.
+                    let isEdgeBlock = (index0 === 0 || index1 === 0 || index2 === 0
+                                       || index0 === shape[0] - 1
+                                       || index1 === shape[1] - 1
+                                       || index2 === shape[2] - 1);
+
+                    template.position.copy(position);
+                    template.updateMatrix();
+                    this.mesh.setMatrixAt(index, template.matrix);
+                    this.positionsIndices.push([position, index, 0, isEdgeBlock]);
+
+                    if (format === 0) {
+                        this.instanceColorsOriginal[4*index + 0] = 0.55;
+                        this.instanceColorsOriginal[4*index + 1] = 0.55;
+                        this.instanceColorsOriginal[4*index + 2] = 0.55;
+                        this.instanceColorsOriginal[4*index + 3] = value / 255.0;
+                    } else if (format === 3) {
+                        this.instanceColorsOriginal[4*index + 0] = value[0] / 255.0;
+                        this.instanceColorsOriginal[4*index + 1] = value[1] / 255.0;
+                        this.instanceColorsOriginal[4*index + 2] = value[2] / 255.0;
+                        this.instanceColorsOriginal[4*index + 3] = 0.8;
+                    } else if (format === 4) {
+                        this.instanceColorsOriginal[4*index + 0] = value[0] / 255.0;
+                        this.instanceColorsOriginal[4*index + 1] = value[1] / 255.0;
+                        this.instanceColorsOriginal[4*index + 2] = value[2] / 255.0;
+                        this.instanceColorsOriginal[4*index + 3] = value[3] / 255.0;
+                    }
+
+                    index += 1;
+                } )
+            } )
+        } );
+
+        this.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(new Float32Array(this.instanceColorsOriginal), 4));
+
+        this.scene.add(this.mesh);
+
+        let ps = [
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 1, 1],
+            [0, 1, 0],
+
+            [0, 0, 0],
+            [1, 0, 0],
+            [1, 0, 1], [0, 0, 1], [1, 0, 1],
+            [1, 1, 1], [0, 1, 1], [1, 1, 1],
+            [1, 1, 0], [0, 1, 0], [1, 1, 0],
+            [1, 0, 0]
+        ];
+
+        let [h, w, d] = shape;
+        let corners = ps .map(([i, j, k]) => [h*i, w*j, d*k]);
+
+        corners = corners .map ( ([x, y, z]) => {
+            return new THREE.Vector3(-(k*x - mean0),
+                                     -(k*y - mean1),
+                                     -(k*z - mean2));
+        });
+
+        let material = new THREE.LineBasicMaterial({
+            color: 0x00b0b0,
+        });
+
+        let geometry = new THREE.BufferGeometry().setFromPoints(corners);
+        this.lines = new THREE.Line(geometry, material);
+
+        this.scene.add(this.lines);
+
+        this.renderer.render(this.scene, this.camera);
+    };
+
+    cuboidFrameDraw([index0, index1, index2], [index0_2, index1_2, index2_2], color = 0x20b020) {
+        let { Shape: shape } = this.props.data;
+
+        // EulerianGraphQ@PetersonGraph[4, 1] False
+        let ps = [
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 1, 1],
+            [0, 1, 0],
+
+            [0, 0, 0],
+            [1, 0, 0],
+            [1, 0, 1], [0, 0, 1], [1, 0, 1],
+            [1, 1, 1], [0, 1, 1], [1, 1, 1],
+            [1, 1, 0], [0, 1, 0], [1, 1, 0],
+            [1, 0, 0]
+        ];
+
+        let scale = 100;
+        let max = Math.max(...shape);
+        let rescale = scale / max;
+        let k = scale / max;
+        let mean0 = rescale * shape[0] / 2;
+        let mean1 = rescale * shape[1] / 2;
+        let mean2 = rescale * shape[2] / 2;
+
+        let corners = ps.map(([i, j, k]) => [
+            (1 - i) * index0 + i * index0_2,
+            (1 - j) * index1 + j * index1_2,
+            (1 - k) * index2 + k * index2_2
+        ]);
+
+        corners = corners.map(([x, y, z]) => {
+            return new THREE.Vector3(mean0 - x * k,
+                mean1 - y * k,
+                mean2 - z * k);
+        });
+
+        let material = new THREE.LineBasicMaterial({
+            color: color,
+        });
+
+        let geometry = new THREE.BufferGeometry().setFromPoints(corners);
+        let lines = new THREE.Line(geometry, material);
+
+        this.cuboids.push(lines);
+        this.scene.add(lines);
+    }
+
     animate() {
+        let { Shape: shape} = this.props.data;
+
         requestAnimationFrame(this.animate);
 
         if (this.mesh === null) {
@@ -213,6 +414,15 @@ export class ArrayPlot3D extends React.Component {
             });
         }
 
+        this.cuboids .forEach (_ => this.scene.remove(_))
+
+        this.cuboidFrameDraw([0, 0, 0], [shape[0], shape[1], 1], 'red');
+        this.cuboidFrameDraw([0, 0, 4], [shape[0], shape[1], 5], 'red');
+        this.cuboidFrameDraw([0, 0, 0], [shape[0], 1, shape[2]], 0xa0f0a0);
+        this.cuboidFrameDraw([0, 4, 0], [shape[0], 5, shape[2]], 0xa0ffa0);
+        this.cuboidFrameDraw([0, 0, 0], [1, shape[1], shape[2]], 'purple');
+        this.cuboidFrameDraw([4, 0, 0], [5, shape[1], shape[2]], 'purple');
+
         if (!this.mousePosition.equals(this.previousMousePosition)) {
             shouldUpdate = true;
             this.previousMousePosition.copy(this.mousePosition);
@@ -229,30 +439,53 @@ export class ArrayPlot3D extends React.Component {
                 this.instanceColors[4*instanceId + 2] = 0;
                 this.instanceColors[4*instanceId + 3] = 1;
 
-                // let matrix = new THREE.Matrix4();
-                // this.mesh.getMatrixAt(instanceId, matrix);
-                // let index012 = this.positionToIndices(matrix.elements.slice(12, 12 + 3));
+                let matrix = new THREE.Matrix4();
+                this.mesh.getMatrixAt(instanceId, matrix);
+                let index012 = this.positionToIndices(matrix.elements.slice(12, 12 + 3));
+
                 this.lastKMouseOverCoordinates.push(intersection[0].point);
-                if (this.lastKMouseOverCoordinates.length > 12) {
+                if (this.lastKMouseOverCoordinates.length > 20) {
                     this.lastKMouseOverCoordinates = this.lastKMouseOverCoordinates.slice(1);
                 }
 
-                let [dX, dY, dZ] = [0, 0, 0];
+                let votes = [0, 0, 0];
                 this.lastKMouseOverCoordinates.slice(1) .forEach ((_, index) => {
                     let {x: x2, y: y2, z: z2} = this.lastKMouseOverCoordinates[index + 1];
                     let {x: x1, y: y1, z: z1} = this.lastKMouseOverCoordinates[index];
 
-                    [dX, dY, dZ] = [
-                        dX + x2 - x1,
-                        dY + y2 - y1,
-                        dZ + z2 - z1
+                    let differences = [
+                        Math.abs(x2 - x1),
+                        Math.abs(y2 - y1),
+                        Math.abs(z2 - z1)
                     ];
+
+                    let max = Math.max(...differences);
+                    let length = this.lastKMouseOverCoordinates.length;
+                    votes .forEach ((_, i) => votes[i] += (differences[i] === max ? 1 : 0))
                 });
 
-                let length = this.lastKMouseOverCoordinates.length - 1;
-                [dX, dY, dZ] = [dX, dY, dZ] .map (_ => parseInt(`${Math.sign(Math.round(_ / length))}`, 10));
+                console.log(votes);
 
-                console.log(dX, dY, dZ);
+                let [i, j, k] = votes .map (_ => _ === Math.max(...votes) ? 1 : 0)
+
+                /*let [pi, pj, pk] = this.previousSlicesScanSignature;
+                if ((i !== pi || j !== pj || k !== pk) &&
+                    (performance.now() - this.previousSlicesScanSignatureChangeTime > 0)) {
+
+                    this.previousSlicesScanSignatureChangeTime = performance.now();
+                    this.previousSlicesScanSignature = [i, j, k];
+                }
+
+                [i, j, k] = this.previousSlicesScanSignature;*/
+
+                index012 = [i, j, k] .map ((_, index) => _*index012[index]);
+
+                let p = Math.max(...index012);
+                let q = p+1;
+                this.cuboidFrameDraw([p*i, p*j, p*k], [p*i + (1 - i)*shape[0], p*j + (1 - j)*shape[1], p*k + (1 - k)*shape[2]], 'orange');
+                this.cuboidFrameDraw([q*i, q*j, q*k], [q*i + (1 - i)*shape[0], q*j + (1 - j)*shape[1], q*k + (1 - k)*shape[2]], 'orange');
+
+                this.cuboidFrameDraw([0, 0, 4], [], 'red');
             }
         }
 
@@ -262,149 +495,6 @@ export class ArrayPlot3D extends React.Component {
             this.renderer.render(this.scene, this.camera);
         }
     }
-
-    meshCreate() {
-        let {Value: array, Shape: shape} = this.props.data;
-        let totalCount = shape[0] * shape[1] * shape[2];
-
-        let {ValueReferences: references, ValueReferencesEncodedInsert: inserts} = this.props.data;
-
-        if (references) {
-            for (let reference in inserts) {
-                // Base64 decode
-                let binary = atob(inserts[reference]);
-
-                // Probably better to just flatten the index on each drawing pass rather than reshape here.
-                // The implementation complexity of this is low so keeping for now.
-                let index = 0;
-                let array = [...new Uint8Array(shape[1])] .map (() =>
-                                [...new Uint8Array(shape[2])].map(() =>
-                                    [...new Uint8Array(shape[3])].map(() => binary.charCodeAt(index++))
-                                )
-                            );
-
-                this.valueReferences[reference] = array;
-            }
-
-            array = references .map ((reference) => this.valueReferences[reference]);
-        }
-
-        let format = 0;
-        if (shape.length === 4) {
-            format = shape[3];
-        }
-
-        this.positionsIndices = [];
-        this.buckets = [...new Array(totalCount + 1)] .map (() => []);
-        this.instanceColorsOriginal = new Float32Array(4*totalCount);
-        this.instanceColors = new Float32Array(4*totalCount);
-
-        let scale = 100;
-        let max = Math.max(...shape);
-        let rescale = scale / max;
-        let mean0 = rescale * shape[0] / 2;
-        let mean1 = rescale * shape[1] / 2;
-        let mean2 = rescale * shape[2] / 2;
-
-        this.scene.remove(this.mesh);
-        this.scene.remove(this.lines);
-        this.mesh = new THREE.InstancedMesh(this.geometry, this.material, totalCount);
-        this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-        let template = new THREE.Object3D();
-        let index = 0;
-
-        this.positionToIndices = ([x, y, z]) => {
-            return [
-                Math.round((-x + mean0 - k*0.5) / k),
-                Math.round((-y + mean1 - k*0.5) / k),
-                Math.round((-z + mean2 - k*0.5) / k),
-            ];
-        };
-
-        let k = scale / max;
-        array .forEach ( (axis1, index0) =>  {
-            axis1 .forEach ( (axis2, index1) => {
-                axis2 .forEach ( (value, index2) => {
-                    let position = new THREE.Vector3(-(k*index0 + k*0.5 - mean0),
-                                                     -(k*index1 + k*0.5 - mean1),
-                                                     -(k*index2 + k*0.5 - mean2))
-
-                    // Used to keep transparent edge blocks for mouse cursor intersection
-                    // that would otherwise be removed.
-                    // A better method will be to just use one large cube for the
-                    // intersection and use the point to determine the underlying block.
-                    let isEdgeBlock = (index0 === 0 || index1 === 0 || index2 === 0
-                                       || index0 === shape[0] - 1
-                                       || index1 === shape[1] - 1
-                                       || index2 === shape[2] - 1);
-
-                    template.position.copy(position);
-                    template.updateMatrix();
-                    this.mesh.setMatrixAt(index, template.matrix);
-                    this.positionsIndices.push([position, index, 0, isEdgeBlock]);
-
-                    if (format === 0) {
-                        this.instanceColorsOriginal[4*index + 0] = 0.55;
-                        this.instanceColorsOriginal[4*index + 1] = 0.55;
-                        this.instanceColorsOriginal[4*index + 2] = 0.55;
-                        this.instanceColorsOriginal[4*index + 3] = value / 255.0;
-                    } else if (format === 3) {
-                        this.instanceColorsOriginal[4*index + 0] = value[0] / 255.0;
-                        this.instanceColorsOriginal[4*index + 1] = value[1] / 255.0;
-                        this.instanceColorsOriginal[4*index + 2] = value[2] / 255.0;
-                        this.instanceColorsOriginal[4*index + 3] = 0.8;
-                    } else if (format === 4) {
-                        this.instanceColorsOriginal[4*index + 0] = value[0] / 255.0;
-                        this.instanceColorsOriginal[4*index + 1] = value[1] / 255.0;
-                        this.instanceColorsOriginal[4*index + 2] = value[2] / 255.0;
-                        this.instanceColorsOriginal[4*index + 3] = value[3] / 255.0;
-                    }
-
-                    index += 1;
-                } )
-            } )
-        } );
-
-        this.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(new Float32Array(this.instanceColorsOriginal), 4));
-
-        this.scene.add(this.mesh);
-
-        // EulerianGraphQ@PetersonGraph[4, 1] False
-        let ps = [
-            [0, 0, 0],
-            [0, 0, 1],
-            [0, 1, 1],
-            [0, 1, 0],
-
-            [0, 0, 0],
-            [1, 0, 0],
-            [1, 0, 1], [0, 0, 1], [1, 0, 1],
-            [1, 1, 1], [0, 1, 1], [1, 1, 1],
-            [1, 1, 0], [0, 1, 0], [1, 1, 0],
-            [1, 0, 0]
-        ];
-
-        let [h, w, d] = shape;
-        let corners = ps .map(([i, j, k]) => [h*i, w*j, d*k]);
-
-        corners = corners .map ( ([x, y, z]) => {
-            return new THREE.Vector3(-(k*x - mean0),
-                                     -(k*y - mean1),
-                                     -(k*z - mean2));
-        });
-
-        let material = new THREE.LineBasicMaterial({
-            color: 0x00b0b0,
-        });
-
-        let geometry = new THREE.BufferGeometry().setFromPoints(corners);
-        this.lines = new THREE.Line(geometry, material);
-
-        this.scene.add(this.lines);
-
-        this.renderer.render(this.scene, this.camera);
-    };
 
     render() {
         if (this.mesh !== null) {
