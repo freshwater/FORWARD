@@ -13,24 +13,30 @@ export class ArrayPlot3D extends React.Component {
 
         this.scene = new THREE.Scene();
         this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-        this.camera = null;
-        this.previousCameraPosition = new THREE.Vector3(0, 0, 0);
-        this.previousMousePosition = new THREE.Vector2(0, 0);
         this.mesh = null;
-        this.lines = null;
-        this.positionToIndices = () => {};
-        this.lastKMouseOverCoordinates = [];
-        this.mousePosition = new THREE.Vector2(1, 1);
-        this.cuboids = [];
-        // this.previousSlicesScanSignatureChangeTime = performance.now();
-        // this.previousSlicesScanSignature = [0, 0, 0];
         this.geometry = null;
         this.material = null;
 
+        // Rendering loop items.
+        // We implement a custom render order sort by reordering elements
+        // in an InstancedMesh array which renders back-to-front. We need
+        // to keep track of the original colors so that they can be
+        // reassigned into that array when it is reordered.
         this.positionsIndices = [];
         this.instanceColorsOriginal = null;
         this.instanceColors = null;
         this.buckets = [];
+
+        this.camera = null;
+        this.previousCameraPosition = new THREE.Vector3(0, 0, 0);
+        this.mousePosition = new THREE.Vector2(1, 1);
+        this.previousMousePosition = new THREE.Vector2(0, 0);
+
+        // 2D slice scan items
+        this.positionToIndices = () => {};
+        this.lastKMouseOverCoordinates = [];
+        this.cuboids = [];
+        this.highlightedCoordinateRange = null;
 
         this.valueReferences = {};
     }
@@ -191,7 +197,6 @@ export class ArrayPlot3D extends React.Component {
         let mean2 = rescale * shape[2] / 2;
 
         this.scene.remove(this.mesh);
-        this.scene.remove(this.lines);
         for (let cuboid of this.cuboids) {
             this.scene.remove(cuboid);
         }
@@ -231,7 +236,7 @@ export class ArrayPlot3D extends React.Component {
                     template.position.copy(position);
                     template.updateMatrix();
                     this.mesh.setMatrixAt(index, template.matrix);
-                    this.positionsIndices.push([position, index, 0, isEdgeBlock]);
+                    this.positionsIndices.push([position, index, 0, isEdgeBlock, [index0, index1, index2]]);
 
                     if (format === 0) {
                         this.instanceColorsOriginal[4*index + 0] = 0.55;
@@ -258,38 +263,6 @@ export class ArrayPlot3D extends React.Component {
         this.geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(new Float32Array(this.instanceColorsOriginal), 4));
 
         this.scene.add(this.mesh);
-
-        let ps = [
-            [0, 0, 0],
-            [0, 0, 1],
-            [0, 1, 1],
-            [0, 1, 0],
-
-            [0, 0, 0],
-            [1, 0, 0],
-            [1, 0, 1], [0, 0, 1], [1, 0, 1],
-            [1, 1, 1], [0, 1, 1], [1, 1, 1],
-            [1, 1, 0], [0, 1, 0], [1, 1, 0],
-            [1, 0, 0]
-        ];
-
-        let [h, w, d] = shape;
-        let corners = ps .map(([i, j, k]) => [h*i, w*j, d*k]);
-
-        corners = corners .map ( ([x, y, z]) => {
-            return new THREE.Vector3(-(k*x - mean0),
-                                     -(k*y - mean1),
-                                     -(k*z - mean2));
-        });
-
-        let material = new THREE.LineBasicMaterial({
-            color: 0x00b0b0,
-        });
-
-        let geometry = new THREE.BufferGeometry().setFromPoints(corners);
-        this.lines = new THREE.Line(geometry, material);
-
-        this.scene.add(this.lines);
 
         this.renderer.render(this.scene, this.camera);
     };
@@ -354,6 +327,61 @@ export class ArrayPlot3D extends React.Component {
 
         let shouldUpdate = false;
 
+        this.cuboids .forEach (_ => this.scene.remove(_))
+
+        if (!this.mousePosition.equals(this.previousMousePosition)) {
+            shouldUpdate = true;
+            this.previousMousePosition.copy(this.mousePosition);
+
+            let raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(this.mousePosition, this.camera);
+            let intersection = raycaster.intersectObject(this.mesh);
+
+            if (intersection.length > 0) {
+                let instanceId = intersection[0].instanceId;
+
+                let matrix = new THREE.Matrix4();
+                this.mesh.getMatrixAt(instanceId, matrix);
+                let index012 = this.positionToIndices(matrix.elements.slice(12, 12 + 3));
+
+                this.lastKMouseOverCoordinates.push(intersection[0].point);
+                if (this.lastKMouseOverCoordinates.length > 13) {
+                    this.lastKMouseOverCoordinates = this.lastKMouseOverCoordinates.slice(1);
+                }
+
+                let votes = [0, 0, 0];
+                this.lastKMouseOverCoordinates.slice(1) .forEach ((_, index) => {
+                    let {x: x2, y: y2, z: z2} = this.lastKMouseOverCoordinates[index + 1];
+                    let {x: x1, y: y1, z: z1} = this.lastKMouseOverCoordinates[index];
+
+                    let differences = [
+                        Math.abs(x2 - x1),
+                        Math.abs(y2 - y1),
+                        Math.abs(z2 - z1)
+                    ];
+
+                    let max = Math.max(...differences);
+                    let length = this.lastKMouseOverCoordinates.length;
+                    votes .forEach ((_, i) => votes[i] += (differences[i] === max ? 1 : 0))
+                });
+
+                let [i, j, k] = votes .map (_ => _ === Math.max(...votes) ? 1 : 0)
+
+                index012 = [i, j, k] .map ((_, index) => _*index012[index]);
+
+                let p = Math.max(...index012);
+                let q = p+1;
+                this.cuboidFrameDraw([p*i, p*j, p*k], [q*i + (1 - i)*shape[0], q*j + (1 - j)*shape[1], q*k + (1 - k)*shape[2]], 0x70a049);
+                // this.cuboidFrameDraw([p*i, p*j, p*k], [q*i + (1 - i)*shape[0], q*j + (1 - j)*shape[1], q*k + (1 - k)*shape[2]], 0x70dfd0);
+                this.highlightedCoordinateRange = [[p*i, p*j, p*k], [q*i + (1 - i)*shape[0], q*j + (1 - j)*shape[1], q*k + (1 - k)*shape[2]]];
+                this.cuboidFrameDraw([0, 0, 0], [shape[0], shape[1], shape[2]], 0x808080);
+            } else {
+                this.highlightedCoordinateRange = null;
+            }
+
+            this.previousCameraPosition = new THREE.Vector3();
+        }
+
         // Couldn't figure out a depth/blend setting to automatically set
         // the render order as back-to-front from any direction.
         // This will work for now.
@@ -386,6 +414,7 @@ export class ArrayPlot3D extends React.Component {
             this.positionsIndices .forEach ((tuple) => {
                 // ignore fully transparent blocks
                 let [_position, indexOriginal, cameraDistance, isEdgeBlock] = tuple;
+
                 if (isEdgeBlock || this.instanceColorsOriginal[4*indexOriginal + 3] !== 0) {
                     cameraDistance = (cameraDistance - min) / (max - min);
                     cameraDistance = 1 - cameraDistance;
@@ -399,94 +428,36 @@ export class ArrayPlot3D extends React.Component {
             // Reassign positions and colors
             let index = 0;
             this.buckets .forEach ( (bucket) => {
-                bucket .forEach (([position, indexOriginal]) => {
+                bucket .forEach (([position, indexOriginal, _cd, _ieb, [index0, index1, index2]]) => {
                     template.position.copy(position);
                     template.updateMatrix();
                     this.mesh.setMatrixAt(index, template.matrix);
 
+                    let isHighlighted = true;
+                    if (this.highlightedCoordinateRange !== null) {
+                        let [[x1, y1, z1], [x2, y2, z2]] = this.highlightedCoordinateRange;
+                        if ((x1 <= index0 && index0 < x2) &&
+                            (y1 <= index1 && index1 < y2) &&
+                            (z1 <= index2 && index2 < z2)) {
+                            isHighlighted = true;
+                        } else {
+                            isHighlighted = false;
+                        }
+                    }
+
                     this.instanceColors[4*index + 0] = this.instanceColorsOriginal[4*indexOriginal + 0];
                     this.instanceColors[4*index + 1] = this.instanceColorsOriginal[4*indexOriginal + 1];
                     this.instanceColors[4*index + 2] = this.instanceColorsOriginal[4*indexOriginal + 2];
-                    this.instanceColors[4*index + 3] = this.instanceColorsOriginal[4*indexOriginal + 3];
+
+                    if (isHighlighted) {
+                        this.instanceColors[4*index + 3] = this.instanceColorsOriginal[4*indexOriginal + 3];
+                    } else {
+                        this.instanceColors[4*index + 3] = this.instanceColorsOriginal[4*indexOriginal + 3] / 80;
+                    }
 
                     index += 1;
                 });
             });
-        }
-
-        this.cuboids .forEach (_ => this.scene.remove(_))
-
-        this.cuboidFrameDraw([0, 0, 0], [shape[0], shape[1], 1], 'red');
-        this.cuboidFrameDraw([0, 0, 4], [shape[0], shape[1], 5], 'red');
-        this.cuboidFrameDraw([0, 0, 0], [shape[0], 1, shape[2]], 0xa0f0a0);
-        this.cuboidFrameDraw([0, 4, 0], [shape[0], 5, shape[2]], 0xa0ffa0);
-        this.cuboidFrameDraw([0, 0, 0], [1, shape[1], shape[2]], 'purple');
-        this.cuboidFrameDraw([4, 0, 0], [5, shape[1], shape[2]], 'purple');
-
-        if (!this.mousePosition.equals(this.previousMousePosition)) {
-            shouldUpdate = true;
-            this.previousMousePosition.copy(this.mousePosition);
-
-            let raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(this.mousePosition, this.camera);
-            let intersection = raycaster.intersectObject(this.mesh);
-
-            if (intersection.length > 0) {
-                let instanceId = intersection[0].instanceId;
-
-                this.instanceColors[4*instanceId + 0] = 1;
-                this.instanceColors[4*instanceId + 1] = 0;
-                this.instanceColors[4*instanceId + 2] = 0;
-                this.instanceColors[4*instanceId + 3] = 1;
-
-                let matrix = new THREE.Matrix4();
-                this.mesh.getMatrixAt(instanceId, matrix);
-                let index012 = this.positionToIndices(matrix.elements.slice(12, 12 + 3));
-
-                this.lastKMouseOverCoordinates.push(intersection[0].point);
-                if (this.lastKMouseOverCoordinates.length > 20) {
-                    this.lastKMouseOverCoordinates = this.lastKMouseOverCoordinates.slice(1);
-                }
-
-                let votes = [0, 0, 0];
-                this.lastKMouseOverCoordinates.slice(1) .forEach ((_, index) => {
-                    let {x: x2, y: y2, z: z2} = this.lastKMouseOverCoordinates[index + 1];
-                    let {x: x1, y: y1, z: z1} = this.lastKMouseOverCoordinates[index];
-
-                    let differences = [
-                        Math.abs(x2 - x1),
-                        Math.abs(y2 - y1),
-                        Math.abs(z2 - z1)
-                    ];
-
-                    let max = Math.max(...differences);
-                    let length = this.lastKMouseOverCoordinates.length;
-                    votes .forEach ((_, i) => votes[i] += (differences[i] === max ? 1 : 0))
-                });
-
-                console.log(votes);
-
-                let [i, j, k] = votes .map (_ => _ === Math.max(...votes) ? 1 : 0)
-
-                /*let [pi, pj, pk] = this.previousSlicesScanSignature;
-                if ((i !== pi || j !== pj || k !== pk) &&
-                    (performance.now() - this.previousSlicesScanSignatureChangeTime > 0)) {
-
-                    this.previousSlicesScanSignatureChangeTime = performance.now();
-                    this.previousSlicesScanSignature = [i, j, k];
-                }
-
-                [i, j, k] = this.previousSlicesScanSignature;*/
-
-                index012 = [i, j, k] .map ((_, index) => _*index012[index]);
-
-                let p = Math.max(...index012);
-                let q = p+1;
-                this.cuboidFrameDraw([p*i, p*j, p*k], [p*i + (1 - i)*shape[0], p*j + (1 - j)*shape[1], p*k + (1 - k)*shape[2]], 'orange');
-                this.cuboidFrameDraw([q*i, q*j, q*k], [q*i + (1 - i)*shape[0], q*j + (1 - j)*shape[1], q*k + (1 - k)*shape[2]], 'orange');
-
-                this.cuboidFrameDraw([0, 0, 4], [], 'red');
-            }
         }
 
         if (shouldUpdate) {
