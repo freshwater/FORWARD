@@ -332,8 +332,11 @@ class ZoomBox extends React.Component {
 
 class InspectionTableBox extends React.Component {
     render() {
-        let { Shape: shape, DisplayScale: displayScale } = this.props.data;
+        let { /*Shape: shape,*/ DisplayScale: displayScale } = this.props.data;
         let inspectionData = this.props.inspectionData;
+        let shape = [inspectionData.length,
+                     inspectionData[0].length,
+                     inspectionData[0][0].constructor === Array ? inspectionData[0][0].length : 0];
 
         let zoomLevel = this.props.zoomLevel;
 
@@ -367,8 +370,8 @@ class InspectionTableBox extends React.Component {
                             let rowIndex = dataRowStart + row;
                             let columnIndex = dataColumnStart + column;
 
-                            if (0 < rowIndex && rowIndex < dataHeight &&
-                                0 < columnIndex && columnIndex < dataWidth) {
+                            if (0 <= rowIndex && rowIndex < dataHeight &&
+                                0 <= columnIndex && columnIndex < dataWidth) {
                                 return inspectionData[dataRowStart + row][dataColumnStart + column];
                             } else {
                                 return dataChannels === 0 ? <span>&nbsp;&nbsp;&nbsp;</span>
@@ -378,17 +381,34 @@ class InspectionTableBox extends React.Component {
                     );
 
         let keyMake = (a, b, c) => `(${a},${b},${c})`;
+
+        let validColumnCheck = (column) => 0 <= (dataColumnStart + column) && (dataColumnStart + column) < dataWidth;
+        let validRowCheck = (row) => 0 <= (dataRowStart + row) && (dataRowStart + row) < dataHeight;
+
+        let format = (_) => _.toFixed ? _.toFixed(8).replace(/(\.0+|0+)$/, "") : _;
+
         return <div className="inspection-table-box" channel-count={dataChannels} style={{
                         top: topMain + 200 + 10,
                         left: rightMain + 4}}>
             <table>
+                <thead>
+                    <tr>
+                        <td></td>{
+                            [...new Uint8Array(dataColumnStop - dataColumnStart)] .map ((_, column) => {
+                                return <td key={column} colSpan={Math.max(1, dataChannels) + 2}
+                                        className="column-header">{
+                                            validColumnCheck(column) ? dataColumnStart + column : ""
+                                        }</td>})
+                        }
+                    </tr>
+                </thead>
                 <tbody>
                     {slice .map (
                         (row, rowIndex) => <tr key={rowIndex}>
-                            {row .map ((value, columnIndex) =>
+                            <td className="row-header">{validRowCheck(rowIndex) ? dataRowStart + rowIndex : ""}</td>{row .map ((value, columnIndex) =>
                                 <React.Fragment key={keyMake(rowIndex, columnIndex, 0)}><td key={keyMake(rowIndex, columnIndex, 1)} className="left"></td>{
-                                    dataChannels === 0 ? <td key={keyMake(rowIndex, columnIndex, 2)}>{value}</td>
-                                                       : value .map ((v, i) => <td key={keyMake(rowIndex, columnIndex, 2 + i)} className={`i${i}`}>{v}</td>)}
+                                    dataChannels === 0 ? <td key={keyMake(rowIndex, columnIndex, 2)}>{format(value)}</td>
+                                                       : value .map ((v, i) => <td key={keyMake(rowIndex, columnIndex, 2 + i)} className={`i${i}`}>{format(v)}</td>)}
                                 <td key={keyMake(rowIndex, columnIndex, -1)} className="right"></td></React.Fragment>
                             )}
                         </tr>)}
