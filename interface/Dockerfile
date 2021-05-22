@@ -8,9 +8,10 @@ RUN apt-get update
 
 
 ## Python
+RUN dpkg --configure -a
 
-RUN apt-get install --yes python3
-RUN apt-get install --yes python3-pip
+RUN apt-get install --yes python3.9
+RUN apt install --yes python3-pip
 RUN pip3 install --upgrade pip
 
 
@@ -71,6 +72,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install --yes nodejs \
 RUN npm install @babel/core @babel/cli @babel/preset-react
 RUN npm install webpack webpack-cli
 
+RUN pip install flask
+
 COPY static /tmp
 COPY src .
 COPY roms roms
@@ -78,9 +81,10 @@ COPY roms roms
 RUN python3 -m retro.import roms
 RUN npx babel --presets @babel/react application.js -o application.js
 RUN npx babel --presets @babel/react ArrayPlot3D.js -o ArrayPlot3D.js
-RUN npx webpack ./application.js --mode=development --output-path='.' --output-filename=application.js
+RUN npx babel --presets @babel/react Graphics3D.js -o Graphics3D.js
+RUN npx webpack --entry ./application.js --mode=development --output-path='.' --output-filename=application.js
 
-
+ENV FLASK_APP=server.py
 ENV JUPYTER_TOKEN=token
 
 WORKDIR /workfolder

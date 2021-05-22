@@ -123,9 +123,9 @@ class RetroModule2(Module):
 
         self.frame = objects["Frame"]
 
-        if objects["FrameIndex"] != self.index_previous:
-            frame = self.frame
+        frame = self.frame
 
+        if objects["FrameIndex"] != self.index_previous:
             # add alpha channel
             padded = 255 * np.ones(np.array(frame.shape) + [0, 0, 1])
             padded[:, :, :frame.shape[2]] = frame
@@ -168,11 +168,15 @@ class RetroModule2(Module):
                                       selected_options=["Encodings"] if self.encodings else [],
                                       on_check=self.encoding_display_set)
 
+        # self.frame[:,range(16, 240, 16)] = [255, 255, 0]
+        # self.frame[range(16, 224, 16), :] = [255, 255, 0]
+
         return [
             self.settings(),
             game_choices,
             game_state_choices,
-            Image(self.frame, elements=objects["Elements"], display_scale=2),
+            # Image(self.frame, elements=objects["Elements"], display_scale=2),
+            Image(self.frame, display_scale=1.5),
             self.controls(),
 
             {"Encodings": Image(objects["EncodingsArray"], display_scale=12),
@@ -183,6 +187,7 @@ class RetroModule2(Module):
              "B": Image(self.frame[::2,::2,2], color_map='Grayscale')},
 
             ArrayPlot3D(self.frame_history, _sequence_hacks_much_spooky_do_not_use="secr3tcode"),
+
             objects["Actions"],
             FileImage(objects["DiffsImageFile"]),
             FileImage(objects["PCAEncodingsImageFile"]),

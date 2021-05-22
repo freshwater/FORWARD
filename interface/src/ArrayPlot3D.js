@@ -136,6 +136,8 @@ export class ArrayPlot3D extends React.Component {
 
         domElement.addEventListener('resize', onWindowResize, false);
         domElement.addEventListener('mousemove', onMouseMove, false);
+        domElement.addEventListener('mouseenter', onMouseEnter, false);
+        domElement.addEventListener('mouseout', onMouseLeave, false);
 
         function onWindowResize() {
             this.camera.aspect = domElement.clientWidth / domElement.clientHeight;
@@ -150,6 +152,19 @@ export class ArrayPlot3D extends React.Component {
 
             this1.mousePosition.x = (event.offsetX / domElement.clientWidth)*2 - 1;
             this1.mousePosition.y = -(event.offsetY / domElement.clientHeight)*2 + 1.01;
+        }
+
+        function onMouseEnter(event) {
+            this1.isMouseInside = true;
+        }
+
+        function onMouseLeave(event) {
+            this1.isMouseInside = false;
+            this1.previousMousePosition = new THREE.Vector2();
+            this1.mousePosition = new THREE.Vector2(1000, 1000);
+            this1.previousCameraPosition = new THREE.Vector3();
+            this1.highlightedCoordinateRange = null;
+            this1.animate();
         }
     }
 
@@ -349,6 +364,11 @@ export class ArrayPlot3D extends React.Component {
                     this.lastKMouseOverCoordinates = this.lastKMouseOverCoordinates.slice(1);
                 }
 
+
+                // Determine the general direction in which the user is sliding the mouse
+                // over the cuboid.
+                // Each of the last K - 1 mouse intersection point deltas vote
+                // their largest magnitude direction.
                 let votes = [0, 0, 0];
                 this.lastKMouseOverCoordinates.slice(1) .forEach ((_, index) => {
                     let {x: x2, y: y2, z: z2} = this.lastKMouseOverCoordinates[index + 1];
@@ -374,12 +394,15 @@ export class ArrayPlot3D extends React.Component {
                 this.cuboidFrameDraw([p*i, p*j, p*k], [q*i + (1 - i)*shape[0], q*j + (1 - j)*shape[1], q*k + (1 - k)*shape[2]], 0x70a049);
                 // this.cuboidFrameDraw([p*i, p*j, p*k], [q*i + (1 - i)*shape[0], q*j + (1 - j)*shape[1], q*k + (1 - k)*shape[2]], 0x70dfd0);
                 this.highlightedCoordinateRange = [[p*i, p*j, p*k], [q*i + (1 - i)*shape[0], q*j + (1 - j)*shape[1], q*k + (1 - k)*shape[2]]];
-                this.cuboidFrameDraw([0, 0, 0], [shape[0], shape[1], shape[2]], 0x808080);
             } else {
                 this.highlightedCoordinateRange = null;
             }
 
             this.previousCameraPosition = new THREE.Vector3();
+        }
+
+        if (this.isMouseInside) {
+            this.cuboidFrameDraw([0, 0, 0], [shape[0], shape[1], shape[2]], 0x808080);
         }
 
         // Couldn't figure out a depth/blend setting to automatically set

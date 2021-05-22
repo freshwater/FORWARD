@@ -25,9 +25,9 @@
 }
 
 .container > .list > * {
-    width: 100%;
+    /*width: 100%;
     margin: auto;
-    padding: 12px;
+    padding: 12px;*/
     text-align: center;
 }
 
@@ -196,6 +196,7 @@ table.array tr:last-child, .array tr:last-child td {
 
 .dictionary {
     font-size: 0.95em;
+    line-height: 1em;
 }
 
 .dictionary .key {
